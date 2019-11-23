@@ -28,7 +28,7 @@ class FunctionCallExpression(Ast):
 
     def __init__(self, func, args):
         self.func = func
-        self.args = args
+        self.args = tuple(args)
 
 
 class LiteralExpression(Ast):
