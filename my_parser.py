@@ -75,9 +75,11 @@ class AstVisitor(ABC):
             return self.visit_variable(ast)
         elif isinstance(ast, PrintStatement):
             return self.visit_print(ast)
+        elif isinstance(ast, Ast):
+            pass # just a placeholder
         else:
             raise VisitorError(
-                "Visitor not implemented for type '%s'", ast.__class__)
+                "Visitor not implemented for type '%s'" % ast.__class__)
 
     @abstractmethod
     def visit_assignment(self, ast):
@@ -152,7 +154,12 @@ class Parser:
     def consume(self, typ, errorstr):
         token = self.scanner.scan_next()
         if token.type != typ:
-            raise ParseError(errorstr + " Received : '%s'!" % token)
+            error = errorstr
+            if token.type == Token.EOF:
+                error += "\nUnexpected end of file!"
+            else:
+                error += " Received : '%s'!" % token
+            raise ParseError(error)
         return token
 
     def parse_all(self):
@@ -163,7 +170,9 @@ class Parser:
 
     def parse_next_statement(self):
         token = self.scanner.scan_next()
-        if token.type in self.STATEMENT_RULES:
+        if token.type == Token.EOF:
+            return Ast()
+        elif token.type in self.STATEMENT_RULES:
             return self.STATEMENT_RULES[token.type](token)
         else:
             raise ParseError("Invalid start of statement '%s'!" % token.val)
