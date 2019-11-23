@@ -1,11 +1,13 @@
 from my_parser import AstVisitor
 from scanner import Token
 import random
-
+from multiprocessing import Pool, cpu_count, Lock
 
 class Value:
 
     UNIQUE_DICTIONARY = {}
+    UNIQUE_DICTIONARY_LOCK = Lock()
+    INDIVIDUAL_DICTIONARY_LOCKS = {}
 
     def __init__(self, v='', const=False):
         if isinstance(v, Value):
@@ -55,15 +57,18 @@ class Value:
         l = origlist
         tup = frozenset(l)
         if tup in self.UNIQUE_DICTIONARY:
+            with self.UNIQUE_DICTIONARY_LOCK:
+                self.UNIQUE_DICTIONARY[tup] = set()
+                self.INDIVIDUAL_DICTIONARY_LOCKS[tup] = Lock()
+
+        with self.INDIVIDUAL_DICTIONARY_LOCKS[tup]:
             dictionary = self.UNIQUE_DICTIONARY[tup]
             if len(dictionary) == len(tup):
                 raise EngineError("No more unique values to generate!")
-        else:
-            self.UNIQUE_DICTIONARY[tup] = set()
-            dictionary = self.UNIQUE_DICTIONARY[tup]
 
-        v = random.sample(tup - dictionary, 1)
-        dictionary.add(v)
+            # Value() marks this copy of the value as not constant
+            v = Value(random.sample(tup - dictionary, 1))
+            dictionary.add(v)
         return v
 
     def one_of_unique_times(self, l, number):
@@ -72,15 +77,20 @@ class Value:
             origlist = origlist[0].val
         l = origlist
         tup = frozenset(l)
-        if tup in self.UNIQUE_DICTIONARY:
+        if tup not in self.UNIQUE_DICTIONARY:
+            with self.UNIQUE_DICTIONARY_LOCK:
+                self.UNIQUE_DICTIONARY[tup] = set()
+                self.INDIVIDUAL_DICTIONARY_LOCKS[tup] = Lock()
+
+        with self.INDIVIDUAL_DICTIONARY_LOCKS[tup]:
             dictionary = self.UNIQUE_DICTIONARY[tup]
-            if len(dictionary) <= (len(tup) + number):
+            if len(tup) < (len(dictionary) + number):
                 raise EngineError("Required %d unique values cannot be generated!" % number)
-        else:
-            self.UNIQUE_DICTIONARY[tup] = set()
-            dictionary = self.UNIQUE_DICTIONARY[tup]
-        v = random.sample(tup - dictionary, number)
-        dictionary.update(v)
+            v = []
+            # Value() marks this copy of the value as not constant
+            for y in random.sample(tup - dictionary, number):
+                v.append(Value(y))
+            dictionary.update(v)
         return v
 
     def __hash__(self):
@@ -92,6 +102,9 @@ class Value:
         if isinstance(self.val, Value):
             return self.val.__eq__(y)
         return self.val == y.val
+
+    def __repr__(self):
+        return str(self.val)
 
 
 class Number(Value):
@@ -138,7 +151,6 @@ class Engine(AstVisitor):
         AstVisitor.__init__(self)
         self.defaultrules = {"value": Value('', True), "number": Number()}
         self.grammars = {}
-        self.times = 0
         random.seed()
 
     def visit_assignment(self, ast):
@@ -149,33 +161,43 @@ class Engine(AstVisitor):
 
     def visit_print(self, ast):
         times = int(ast.times.val)
-        self.times = times
-        ret = self.visit(ast.val)
-        return ret
+        each_time = int(times / cpu_count())
+        # equally divide work between count - 1 threads
+        work_times = [int(each_time)] * (cpu_count() - 1)
+        # dump all the extra work on last thread
+        work_times.append(times - (each_time * (cpu_count() - 1)))
+        ast_list = [ast.val] * len(work_times)
+        pool = Pool(cpu_count())
+        ret = pool.starmap(self.visit_optional, zip(ast_list, work_times))
+        pool.close()
+        result = []
+        for y in ret:
+            result.extend(y)
+        return result
 
-    def visit_literal(self, ast):
+    def visit_literal(self, ast, times):
         if ast.val.type == Token.INTEGER:
-            return [Value(int(ast.val.val), True)] * self.times
+            return [Value(int(ast.val.val), True)] * times
         else:
-            return [Value(str(ast.val.val.replace("\"", "")), True)] * self.times
+            return [Value(str(ast.val.val.replace("\"", "")), True)] * times
 
-    def visit_variable(self, ast):
+    def visit_variable(self, ast, times):
         if ast.val.val in self.defaultrules:
-            return [self.defaultrules[ast.val.val]] * self.times
+            return [self.defaultrules[ast.val.val]] * times
         elif ast.val.val in self.grammars:
-            return self.visit(self.grammars[ast.val.val])
+            return self.visit_optional(self.grammars[ast.val.val], times)
         else:
             raise EngineError("No such rule found '%s'!" % ast.val.val)
 
-    def visit_method_call(self, ast):
-        obj = self.visit(ast.obj)
+    def visit_method_call(self, ast, times):
+        obj = self.visit_optional(ast.obj, times)
         func = getattr(obj[0], ast.func.val, None)
         if not callable(func):
             raise EngineError("Invalid method name '%s'!" % ast.func)
         args = []
         arg_is_constant = True
         for arg in ast.args:
-            temp = self.visit(arg)
+            temp = self.visit_optional(arg, times)
             arg_is_constant = arg_is_constant and temp[0].is_constant
             args.append(temp)
 
@@ -190,7 +212,7 @@ class Engine(AstVisitor):
                           % (str(ast.func.val) + "_times", obj[0].__class__))
                     func = bakfunc
                 else:
-                    return func(next(argsorted), self.times)
+                    return func(next(argsorted), times)
             for a in argsorted:
                 res.append(func(a))
         else:
