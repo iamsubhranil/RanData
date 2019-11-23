@@ -5,8 +5,8 @@ import sys
 
 if __name__ == "__main__":
 
-    if len(sys.argv) != 3:
-        print("[Error] Usage : %s <input_file> <output_file>" % sys.argv[0])
+    if len(sys.argv) < 2 or len(sys.argv) > 3:
+        print("[Error] Usage : %s <input_file> [<output_file>]" % sys.argv[0])
         sys.exit(1)
 
     with open("bootstrap.format", "r") as f:
@@ -32,6 +32,10 @@ if __name__ == "__main__":
                     for s in r:
                         res.append(s)
 
-        with open(sys.argv[2], "w") as h:
+        if len(sys.argv) > 2:
+            with open(sys.argv[2], "w") as h:
+                for line in res:
+                    h.write(line + "\n")
+        else:
             for line in res:
-                h.write(line + "\n")
+                print(line)
