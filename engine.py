@@ -94,6 +94,7 @@ class Engine(AstVisitor):
         self.grammars = {}
         self.objectstack = []
         self.resultcache = {} # saves the result of an ast if it is a constant
+        self.times = 0
         random.seed()
 
     def visit_assignment(self, ast):
@@ -105,7 +106,7 @@ class Engine(AstVisitor):
     def visit(self, ast):
         if ast not in self.resultcache:
             res = AstVisitor.visit(self, ast)
-            if isinstance(res, Value) and res.is_constant:
+            if isinstance(res, list) and res[0].is_constant:
                 self.resultcache[ast] = res
         else:
             res = self.resultcache[ast]
@@ -113,26 +114,25 @@ class Engine(AstVisitor):
 
     def visit_print(self, ast):
         times = int(ast.times.val)
-        ret = []
-        for _ in range(times):
-            ret.append(str(ast.val.accept(self)))
+        self.times = times
+        ret = ast.val.accept(self)
         return ret
 
     def visit_literal(self, ast):
         if ast.val.type == Token.INTEGER:
-            return Value(int(ast.val.val), True)
+            return [Value(int(ast.val.val), True)] * self.times
         else:
-            return Value(str(ast.val.val.replace("\"", "")), True)
+            return [Value(str(ast.val.val.replace("\"", "")), True)] * self.times
 
     def visit_variable(self, ast):
         if ast.val.val in self.defaultrules:
-            return self.defaultrules[ast.val.val]
+            return [self.defaultrules[ast.val.val]] * self.times
         elif ast.val.val in self.grammars:
-            if isinstance(self.grammars[ast.val.val], Value):
+            if isinstance(self.grammars[ast.val.val], list):
                 ret = self.grammars[ast.val.val]
             else:
                 ret = self.grammars[ast.val.val].accept(self)
-                if ret.is_constant:
+                if ret[0].is_constant:
                     self.grammars[ast.val.val] = ret
             return ret
         else:
@@ -146,6 +146,10 @@ class Engine(AstVisitor):
         return ret
 
     def visit_function_call(self, ast):
+        obj = self.objectstack[-1]
+        func = getattr(obj[0], ast.func.val, None)
+        if not callable(func):
+            raise EngineError("Invalid method name '%s'!" % ast.func)
         args = []
         if ast.args in self.resultcache:
             args = self.resultcache[ast.args]
@@ -153,14 +157,17 @@ class Engine(AstVisitor):
             is_constant = True
             for arg in ast.args:
                 temp = arg.accept(self)
-                is_constant = is_constant and temp.is_constant
+                is_constant = is_constant and temp[0].is_constant
                 args.append(temp)
             if is_constant:
                 self.resultcache[ast.args] = args
 
-        obj = self.objectstack[-1]
-        func = getattr(obj, ast.func.val, None)
-        if callable(func):
-            return func(args)
+        res = []
+        argsorted = zip(*args)
+        if obj[0].is_constant:
+            for a in argsorted:
+                res.append(func(a))
         else:
-            raise EngineError("Invalid method name '%s'!" % ast.func)
+            for o, a in zip(obj, argsorted):
+                res.append(getattr(o, ast.func.val)(a))
+        return res

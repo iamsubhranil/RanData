@@ -35,7 +35,7 @@ if __name__ == "__main__":
         if len(sys.argv) > 2:
             with open(sys.argv[2], "w") as h:
                 for line in res:
-                    h.write(line + "\n")
+                    h.write(str(line) + "\n")
         else:
             for line in res:
                 print(line)
