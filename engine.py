@@ -93,7 +93,6 @@ class Engine(AstVisitor):
         AstVisitor.__init__(self)
         self.defaultrules = {"value": Value('', True), "number": Number()}
         self.grammars = {}
-        self.objectstack = []
         self.resultcache = {} # saves the result of an ast if it is a constant
         self.times = 0
         random.seed()
@@ -139,15 +138,8 @@ class Engine(AstVisitor):
         else:
             raise EngineError("No such rule found '%s'!" % ast.val.val)
 
-    def visit_member_access(self, ast):
-        obj = self.visit(ast.object)
-        self.objectstack.append(obj)
-        ret = self.visit(ast.member)
-        self.objectstack.pop()
-        return ret
-
-    def visit_function_call(self, ast):
-        obj = self.objectstack[-1]
+    def visit_method_call(self, ast):
+        obj = self.visit(ast.obj)
         func = getattr(obj[0], ast.func.val, None)
         if not callable(func):
             raise EngineError("Invalid method name '%s'!" % ast.func)

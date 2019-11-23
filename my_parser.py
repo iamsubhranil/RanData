@@ -16,17 +16,10 @@ class AssignmentStatement(Ast):
         self.rhs = rhs
 
 
-class MemberAccessExpression(Ast):
+class MethodCallExpression(Ast):
 
-    def __init__(self, obj, dot, member):
-        self.object = obj
-        self.dot = dot
-        self.member = member
-
-
-class FunctionCallExpression(Ast):
-
-    def __init__(self, func, args):
+    def __init__(self, obj, func, args):
+        self.obj = obj
         self.func = func
         self.args = tuple(args)
 
@@ -66,8 +59,7 @@ class AstVisitor(ABC):
 
     def __init__(self):
         self.VISITOR_METHODS = {LiteralExpression : self.visit_literal,
-                                FunctionCallExpression : self.visit_function_call,
-                                MemberAccessExpression : self.visit_member_access,
+                                MethodCallExpression : self.visit_method_call,
                                 AssignmentStatement : self.visit_assignment,
                                 VariableExpression : self.visit_variable,
                                 PrintStatement : self.visit_print,
@@ -105,11 +97,7 @@ class AstVisitor(ABC):
         pass
 
     @abstractmethod
-    def visit_function_call(self, ast):
-        pass
-
-    @abstractmethod
-    def visit_member_access(self, ast):
+    def visit_method_call(self, ast):
         pass
 
     @abstractmethod
@@ -136,13 +124,9 @@ class PrettyPrinter(AstVisitor):
     def visit_variable(self, ast):
         print(ast.val, end='')
 
-    def visit_member_access(self, ast):
-        ast.object.accept(self)
-        print(".", end='')
-        ast.member.accept(self)
-
-    def visit_function_call(self, ast):
-        print(str(ast.func) + "(", end='')
+    def visit_method_call(self, ast):
+        ast.obj.accept(self)
+        print("." + str(ast.func) + "(", end='')
         if len(ast.args) > 0:
             ast.args[0].accept(self)
             for arg in ast.args[1:]:
@@ -210,7 +194,7 @@ class Parser:
         return AssignmentStatement(token, equals, expr)
 
     def parse_expression(self):
-        return self.parse_member_access()
+        return self.parse_method_call()
 
     def parse_primary(self):
         token = self.scanner.scan_next()
@@ -221,15 +205,12 @@ class Parser:
         else:
             raise ParseError("Invalid token '%s'", token)
 
-    def parse_function_call(self):
-        token = self.parse_primary()
-
-        if not isinstance(token, VariableExpression):
-            raise ParseError("Expected function name!")
-
-        if self.scanner.peek() == '(':
+    def parse_method_call(self):
+        left = self.parse_primary()
+        while self.scanner.match("."):
+            name = self.consume(Token.IDENTIFIER, "Expected function name!")
             self.consume(Token.BRACE_OPEN,
-                         "Expected brace open before function call!")
+                        "Expected brace open before function call!")
             args = []
             if not self.scanner.match(")"):
 
@@ -239,15 +220,5 @@ class Parser:
                     self.consume(
                         Token.COMMA, "Expected ',' after argument!")
                     args.append(self.parse_expression())
-                    # print(args)
-
-            return FunctionCallExpression(token.val, args)
-
-    def parse_member_access(self):
-        left = self.parse_primary()
-        if not isinstance(left, LiteralExpression) and self.scanner.peek() == '.':
-            while self.scanner.peek() == '.':
-                dot = self.consume(Token.DOT, "Expected '.'!")
-                member = self.parse_function_call()
-                left = MemberAccessExpression(left, dot, member)
+            left = MethodCallExpression(left, name, args)
         return left
