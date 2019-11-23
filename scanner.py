@@ -49,7 +49,7 @@ class Scanner:
         return False
 
     def is_at_end(self):
-        return self.pos >= self.length - 1
+        return self.pos >= (self.length - 1)
 
     def make_token(self, typ):
         part = self.source[self.start:self.pos + 1]
@@ -73,9 +73,12 @@ class Scanner:
         return self.make_token(Token.IDENTIFIER)
 
     def string(self):
-        while(self.peek() != '"'):
+        while(self.peek() != '"' and not self.is_at_end()):
             self.advance()
-        self.advance()
+        if not self.is_at_end():
+            self.advance()
+        else:
+            raise ScanError("String not terminated properly!")
         return self.make_token(Token.STRING)
 
     def scan_next(self):
