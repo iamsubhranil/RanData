@@ -93,7 +93,6 @@ class Engine(AstVisitor):
         AstVisitor.__init__(self)
         self.defaultrules = {"value": Value('', True), "number": Number()}
         self.grammars = {}
-        self.resultcache = {} # saves the result of an ast if it is a constant
         self.times = 0
         random.seed()
 
@@ -102,15 +101,6 @@ class Engine(AstVisitor):
         return None
         # return ast.rhs.accept(self)
         # assignment no longer explicitly evaluates
-
-    def visit(self, ast):
-        if ast not in self.resultcache:
-            res = AstVisitor.visit(self, ast)
-            if isinstance(res, list) and res[0].is_constant:
-                self.resultcache[ast] = res
-        else:
-            res = self.resultcache[ast]
-        return res
 
     def visit_print(self, ast):
         times = int(ast.times.val)
@@ -128,13 +118,7 @@ class Engine(AstVisitor):
         if ast.val.val in self.defaultrules:
             return [self.defaultrules[ast.val.val]] * self.times
         elif ast.val.val in self.grammars:
-            if isinstance(self.grammars[ast.val.val], list):
-                ret = self.grammars[ast.val.val]
-            else:
-                ret = self.visit(self.grammars[ast.val.val])
-                if ret[0].is_constant:
-                    self.grammars[ast.val.val] = ret
-            return ret
+            return self.visit(self.grammars[ast.val.val])
         else:
             raise EngineError("No such rule found '%s'!" % ast.val.val)
 
@@ -144,16 +128,9 @@ class Engine(AstVisitor):
         if not callable(func):
             raise EngineError("Invalid method name '%s'!" % ast.func)
         args = []
-        if ast.args in self.resultcache:
-            args = self.resultcache[ast.args]
-        else:
-            is_constant = True
-            for arg in ast.args:
-                temp = self.visit(arg)
-                is_constant = is_constant and temp[0].is_constant
-                args.append(temp)
-            if is_constant:
-                self.resultcache[ast.args] = args
+        for arg in ast.args:
+            temp = self.visit(arg)
+            args.append(temp)
 
         res = []
         argsorted = zip(*args)
