@@ -7,11 +7,13 @@ class Value:
 
     UNIQUE_DICTIONARY = {}
 
-    def __init__(self, v=''):
+    def __init__(self, v='', const=False):
         if isinstance(v, Value):
             self.val = v.val
+            self.is_constant = const
         else:
             self.val = v
+            self.is_constant = const
 
     def __str__(self):
         return str(self.val)
@@ -30,10 +32,10 @@ class Value:
         return Value(ret)
 
     def constant(self, x):
-        return Value(x[0])
+        return Value(x[0], True)
 
     def one_of(self, l):
-        idx = random.randrange(0, len(l), 1)
+        idx = random.randint(0, len(l) - 1)
         return Value(l[idx])
 
     def lower(self, l):
@@ -75,10 +77,10 @@ class Number(Value):
         if len(x) < 2:
             raise EngineError(
                 "number.between takes two arguments, 1 were given")
-        return Value(random.randrange(x[0].val, x[1].val, 1))
+        return Value(random.randint(x[0].val, x[1].val))
 
     def upto(self, x):
-        return Value(random.randrange(0, x[0].val, 1))
+        return Value(random.randint(0, x[0].val))
 
 
 class EngineError(Exception):
@@ -91,6 +93,7 @@ class Engine(AstVisitor):
         self.defaultrules = {"value": Value(), "number": Number()}
         self.grammars = {}
         self.objectstack = []
+        random.seed()
 
     def visit_assignment(self, ast):
         self.grammars[ast.lhs.val] = ast.rhs
@@ -107,15 +110,21 @@ class Engine(AstVisitor):
 
     def visit_literal(self, ast):
         if ast.val.type == Token.INTEGER:
-            return Value(int(ast.val.val))
+            return Value(int(ast.val.val), True)
         else:
-            return Value(str(ast.val.val.replace("\"", "")))
+            return Value(str(ast.val.val.replace("\"", "")), True)
 
     def visit_variable(self, ast):
         if ast.val.val in self.defaultrules:
             return self.defaultrules[ast.val.val]
         elif ast.val.val in self.grammars:
-            return self.grammars[ast.val.val].accept(self)
+            if isinstance(self.grammars[ast.val.val], Value):
+                ret = self.grammars[ast.val.val]
+            else:
+                ret = self.grammars[ast.val.val].accept(self)
+                if ret.is_constant:
+                    self.grammars[ast.val.val] = ret
+            return ret
         else:
             raise EngineError("No such rule found '%s'!" % ast.val.val)
 
