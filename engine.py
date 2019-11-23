@@ -116,7 +116,7 @@ class Engine(AstVisitor):
     def visit_print(self, ast):
         times = int(ast.times.val)
         self.times = times
-        ret = ast.val.accept(self)
+        ret = self.visit(ast.val)
         return ret
 
     def visit_literal(self, ast):
@@ -132,7 +132,7 @@ class Engine(AstVisitor):
             if isinstance(self.grammars[ast.val.val], list):
                 ret = self.grammars[ast.val.val]
             else:
-                ret = self.grammars[ast.val.val].accept(self)
+                ret = self.visit(self.grammars[ast.val.val])
                 if ret[0].is_constant:
                     self.grammars[ast.val.val] = ret
             return ret
@@ -140,9 +140,9 @@ class Engine(AstVisitor):
             raise EngineError("No such rule found '%s'!" % ast.val.val)
 
     def visit_member_access(self, ast):
-        obj = ast.object.accept(self)
+        obj = self.visit(ast.object)
         self.objectstack.append(obj)
-        ret = ast.member.accept(self)
+        ret = self.visit(ast.member)
         self.objectstack.pop()
         return ret
 
@@ -157,7 +157,7 @@ class Engine(AstVisitor):
         else:
             is_constant = True
             for arg in ast.args:
-                temp = arg.accept(self)
+                temp = self.visit(arg)
                 is_constant = is_constant and temp[0].is_constant
                 args.append(temp)
             if is_constant:
