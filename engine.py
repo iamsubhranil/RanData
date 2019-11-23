@@ -90,9 +90,10 @@ class EngineError(Exception):
 class Engine(AstVisitor):
 
     def __init__(self):
-        self.defaultrules = {"value": Value(), "number": Number()}
+        self.defaultrules = {"value": Value('', True), "number": Number()}
         self.grammars = {}
         self.objectstack = []
+        self.resultcache = {} # saves the result of an ast if it is a constant
         random.seed()
 
     def visit_assignment(self, ast):
@@ -100,6 +101,15 @@ class Engine(AstVisitor):
         return None
         # return ast.rhs.accept(self)
         # assignment no longer explicitly evaluates
+
+    def visit(self, ast):
+        if ast not in self.resultcache:
+            res = AstVisitor.visit(self, ast)
+            if isinstance(res, Value) and res.is_constant:
+                self.resultcache[ast] = res
+        else:
+            res = self.resultcache[ast]
+        return res
 
     def visit_print(self, ast):
         times = int(ast.times.val)
@@ -137,8 +147,17 @@ class Engine(AstVisitor):
 
     def visit_function_call(self, ast):
         args = []
-        for arg in ast.args:
-            args.append(arg.accept(self))
+        if ast.args in self.resultcache:
+            args = self.resultcache[ast.args]
+        else:
+            is_constant = True
+            for arg in ast.args:
+                temp = arg.accept(self)
+                is_constant = is_constant and temp.is_constant
+                args.append(temp)
+            if is_constant:
+                self.resultcache[ast.args] = args
+
         obj = self.objectstack[-1]
         func = getattr(obj, ast.func.val, None)
         if callable(func):
