@@ -90,6 +90,7 @@ class EngineError(Exception):
 class Engine(AstVisitor):
 
     def __init__(self):
+        AstVisitor.__init__(self)
         self.defaultrules = {"value": Value('', True), "number": Number()}
         self.grammars = {}
         self.objectstack = []

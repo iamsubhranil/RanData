@@ -62,24 +62,39 @@ class VisitorError(Exception):
 
 class AstVisitor(ABC):
 
+    VISITOR_METHODS = {}
+
+    def __init__(self):
+        self.VISITOR_METHODS = {LiteralExpression : self.visit_literal,
+                                FunctionCallExpression : self.visit_function_call,
+                                MemberAccessExpression : self.visit_member_access,
+                                AssignmentStatement : self.visit_assignment,
+                                VariableExpression : self.visit_variable,
+                                PrintStatement : self.visit_print,
+                                Ast : self.visit_ast}
+
     def visit(self, ast):
-        if isinstance(ast, LiteralExpression):
-            return self.visit_literal(ast)
-        elif isinstance(ast, FunctionCallExpression):
-            return self.visit_function_call(ast)
-        elif isinstance(ast, MemberAccessExpression):
-            return self.visit_member_access(ast)
-        elif isinstance(ast, AssignmentStatement):
-            return self.visit_assignment(ast)
-        elif isinstance(ast, VariableExpression):
-            return self.visit_variable(ast)
-        elif isinstance(ast, PrintStatement):
-            return self.visit_print(ast)
-        elif isinstance(ast, Ast):
-            pass # just a placeholder
+        if ast.__class__ in self.VISITOR_METHODS:
+            return self.VISITOR_METHODS[ast.__class__](ast)
         else:
-            raise VisitorError(
-                "Visitor not implemented for type '%s'" % ast.__class__)
+            if len(self.VISITOR_METHODS) == 0:
+                raise VisitorError("Initialize the inherited visitor with AstVisitor.__init__(self)!")
+            else:
+                raise VisitorError(
+                    "Visitor not implemented for type '%s'" % ast.__class__)
+
+    def visit_optional(self, ast, optional=None): # allow to pass optional data
+        if ast.__class__ in self.VISITOR_METHODS:
+            return self.VISITOR_METHODS[ast.__class__](ast, optional)
+        else:
+            if len(self.VISITOR_METHODS) == 0:
+                raise VisitorError("Initialize the inherited visitor with AstVisitor.__init__(self)!")
+            else:
+                raise VisitorError(
+                    "Visitor not implemented for type '%s'" % ast.__class__)
+
+    def visit_ast(self, ast):
+        pass
 
     @abstractmethod
     def visit_assignment(self, ast):
@@ -107,6 +122,9 @@ class AstVisitor(ABC):
 
 
 class PrettyPrinter(AstVisitor):
+
+    def __init__(self):
+        AstVisitor.__init__(self)
 
     def visit_assignment(self, ast):
         print("%s = " % ast.lhs, end='')
