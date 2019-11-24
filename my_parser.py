@@ -58,29 +58,31 @@ class AstVisitor(ABC):
     VISITOR_METHODS = {}
 
     def __init__(self):
-        self.VISITOR_METHODS = {LiteralExpression : self.visit_literal,
-                                MethodCallExpression : self.visit_method_call,
-                                AssignmentStatement : self.visit_assignment,
-                                VariableExpression : self.visit_variable,
-                                PrintStatement : self.visit_print,
-                                Ast : self.visit_ast}
+        self.VISITOR_METHODS = {LiteralExpression: self.visit_literal,
+                                MethodCallExpression: self.visit_method_call,
+                                AssignmentStatement: self.visit_assignment,
+                                VariableExpression: self.visit_variable,
+                                PrintStatement: self.visit_print,
+                                Ast: self.visit_ast}
 
     def visit(self, ast):
         if ast.__class__ in self.VISITOR_METHODS:
             return self.VISITOR_METHODS[ast.__class__](ast)
         else:
             if len(self.VISITOR_METHODS) == 0:
-                raise VisitorError("Initialize the inherited visitor with AstVisitor.__init__(self)!")
+                raise VisitorError(
+                    "Initialize the inherited visitor with AstVisitor.__init__(self)!")
             else:
                 raise VisitorError(
                     "Visitor not implemented for type '%s'" % ast.__class__)
 
-    def visit_optional(self, ast, optional=None): # allow to pass optional data
+    def visit_optional(self, ast, optional=None):  # allow to pass optional data
         if ast.__class__ in self.VISITOR_METHODS:
             return self.VISITOR_METHODS[ast.__class__](ast, optional)
         else:
             if len(self.VISITOR_METHODS) == 0:
-                raise VisitorError("Initialize the inherited visitor with AstVisitor.__init__(self)!")
+                raise VisitorError(
+                    "Initialize the inherited visitor with AstVisitor.__init__(self)!")
             else:
                 raise VisitorError(
                     "Visitor not implemented for type '%s'" % ast.__class__)
@@ -210,7 +212,7 @@ class Parser:
         while self.scanner.match("."):
             name = self.consume(Token.IDENTIFIER, "Expected function name!")
             self.consume(Token.BRACE_OPEN,
-                        "Expected brace open before function call!")
+                         "Expected brace open before function call!")
             args = []
             if not self.scanner.match(")"):
 
