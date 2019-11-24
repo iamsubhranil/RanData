@@ -4,6 +4,7 @@ import random
 from itertools import repeat, chain
 from contextlib import nullcontext
 
+
 class Value:
 
     def __init__(self, v='', const=False):
@@ -44,42 +45,41 @@ class Value:
     def one_of_unique(self, l):
         global UNIQUE_DICTIONARY
         global UNIQUE_DICTIONARY_LOCK
-        global INDIVIDUAL_DICTIONARY_LOCKS
 
         tup = frozenset(l)
         with UNIQUE_DICTIONARY_LOCK:
             if tup not in UNIQUE_DICTIONARY:
                 UNIQUE_DICTIONARY[tup] = set(l)
-                INDIVIDUAL_DICTIONARY_LOCKS[tup] = MANAGER.Lock()
 
-        with INDIVIDUAL_DICTIONARY_LOCKS[tup]:
             dictionary = UNIQUE_DICTIONARY[tup]
             if len(dictionary) == 0:
                 raise EngineError("No more unique values to generate!")
 
             # Value() marks this copy of the value as not constant
             v = random.sample(dictionary, 1)
-        return Value(v.val)
+            dictionary.remove(v[0])
+
+            UNIQUE_DICTIONARY[tup] = dictionary
+        return Value(v[0].val)
 
     def one_of_unique_times(self, l, number):
         global UNIQUE_DICTIONARY
         global UNIQUE_DICTIONARY_LOCK
-        global INDIVIDUAL_DICTIONARY_LOCKS
 
         tup = frozenset(l)
         with UNIQUE_DICTIONARY_LOCK:
             if tup not in UNIQUE_DICTIONARY:
                 UNIQUE_DICTIONARY[tup] = set(l)
-                INDIVIDUAL_DICTIONARY_LOCKS[tup] = MANAGER.Lock()
 
-        with INDIVIDUAL_DICTIONARY_LOCKS[tup]:
             dictionary = UNIQUE_DICTIONARY[tup]
             if len(dictionary) < number:
-                raise EngineError("Required %d unique values cannot be generated!" % number)
+                raise EngineError(
+                    "Required %d unique values cannot be generated!" % number)
             v = []
             for y in random.sample(dictionary, number):
                 v.append(Value(y.val))
                 dictionary.remove(y)
+
             UNIQUE_DICTIONARY[tup] = dictionary
         return v
 
@@ -116,7 +116,8 @@ class Number(Value):
 
     def upto_times(self, x, y):
         if len(x) != 1:
-            raise EngineError("upto takes one argument, %d were given" % len(x))
+            raise EngineError(
+                "upto takes one argument, %d were given" % len(x))
         upper = int(x[0].val)
         collection = random.choices(range(0, upper + 1), k=y)
         res = [Value(val) for val in collection]
@@ -129,21 +130,20 @@ class Number(Value):
 class EngineError(Exception):
     pass
 
-def init_child(u, l, i, m):
+
+def init_child(u, l):
     global UNIQUE_DICTIONARY
     global UNIQUE_DICTIONARY_LOCK
-    global INDIVIDUAL_DICTIONARY_LOCKS
-    global MANAGER
 
     UNIQUE_DICTIONARY = u
     UNIQUE_DICTIONARY_LOCK = l
-    INDIVIDUAL_DICTIONARY_LOCKS = i
-    MANAGER = m
+
 
 class NullManager:
 
     def Lock(self):
         return nullcontext()
+
 
 class Engine(AstVisitor):
 
@@ -165,7 +165,7 @@ class Engine(AstVisitor):
         # assignment no longer explicitly evaluates
 
     def evaluate_parallel(self, ast):
-        from multiprocessing import Pool, cpu_count, Lock, Manager
+        from multiprocessing import Pool, cpu_count, RLock, Manager
         workers = cpu_count()
         times = int(ast.times.val)
         each_time = int(times / workers)
@@ -175,7 +175,11 @@ class Engine(AstVisitor):
         work_times.append(times - (each_time * (workers - 1)))
         ast_list = [ast.val] * len(work_times)
         manager = Manager()
-        pool = Pool(workers, init_child, (manager.dict(), manager.Lock(), manager.dict(), manager))
+        l = manager.RLock()
+        u = manager.dict()
+        pool = Pool(processes=workers, initializer=init_child, initargs=(u,
+                                                                         l))
+
         ret = pool.starmap(self.visit_optional, zip(ast_list, work_times))
         pool.close()
         result = []
@@ -191,7 +195,7 @@ class Engine(AstVisitor):
                 pass
         # either on_parallel is off or import failed
         times = int(ast.times.val)
-        init_child({}, nullcontext(), {}, NullManager())
+        init_child({}, nullcontext())
         return self.visit_optional(ast.val, times)
 
     def visit_literal(self, ast, times):
@@ -218,7 +222,8 @@ class Engine(AstVisitor):
         obj = self.visit_optional(ast.obj, times)
         obj0, obj = self.peek_one(obj)
         if obj0.__class__ not in self.method_dictionary:
-            raise EngineError("Invalid object type '%s'!" % str(obj0.__class__))
+            raise EngineError("Invalid object type '%s'!" %
+                              str(obj0.__class__))
         if ast.func.val not in self.method_dictionary[obj0.__class__]:
             raise EngineError("Invalid method name '%s'!" % (ast.func))
         func = self.method_dictionary[obj0.__class__][ast.func.val]
