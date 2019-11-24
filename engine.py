@@ -1,13 +1,11 @@
 from my_parser import AstVisitor
 from scanner import Token
 import random
-from multiprocessing import Pool, cpu_count, Lock
+from multiprocessing import Pool, cpu_count, Lock, Manager
+from itertools import repeat, chain
+
 
 class Value:
-
-    UNIQUE_DICTIONARY = {}
-    UNIQUE_DICTIONARY_LOCK = Lock()
-    INDIVIDUAL_DICTIONARY_LOCKS = {}
 
     def __init__(self, v='', const=False):
         if isinstance(v, Value):
@@ -27,20 +25,20 @@ class Value:
         return Value(ret)
 
     def append_times(self, x, y):
-        return [self.append(x)] * y
+        return repeat(self.append(x), y)
 
     def constant(self, x):
         return Value(x[0], True)
 
     def constant_times(self, x, y):
-        return [Value(x[0], True)] * y
+        return repeat(Value(x[0], True), y)
 
     def one_of(self, l):
         return Value(random.choice(l))
 
     def one_of_times(self, l, y):
         res = []
-        for _ in range(y):
+        for _ in repeat(None, y):
             res.append(Value(random.choice(l)))
         return res
 
@@ -48,49 +46,48 @@ class Value:
         return Value(str(self.val).lower(), self.is_constant)
 
     def lower_times(self, x):
-        return [self.lower()] * x
+        return repeat(self.lower(), x)
 
     def one_of_unique(self, l):
-        origlist = l
-        while len(origlist) == 1 and isinstance(origlist[0], Value):
-            origlist = origlist[0].val
-        l = origlist
-        tup = frozenset(l)
-        if tup in self.UNIQUE_DICTIONARY:
-            with self.UNIQUE_DICTIONARY_LOCK:
-                self.UNIQUE_DICTIONARY[tup] = set()
-                self.INDIVIDUAL_DICTIONARY_LOCKS[tup] = Lock()
+        global UNIQUE_DICTIONARY
+        global UNIQUE_DICTIONARY_LOCK
+        global INDIVIDUAL_DICTIONARY_LOCKS
 
-        with self.INDIVIDUAL_DICTIONARY_LOCKS[tup]:
-            dictionary = self.UNIQUE_DICTIONARY[tup]
-            if len(dictionary) == len(tup):
+        tup = frozenset(l)
+        with UNIQUE_DICTIONARY_LOCK:
+            if tup not in UNIQUE_DICTIONARY:
+                UNIQUE_DICTIONARY[tup] = set(l)
+                INDIVIDUAL_DICTIONARY_LOCKS[tup] = MANAGER.Lock()
+
+        with INDIVIDUAL_DICTIONARY_LOCKS[tup]:
+            dictionary = UNIQUE_DICTIONARY[tup]
+            if len(dictionary) == 0:
                 raise EngineError("No more unique values to generate!")
 
             # Value() marks this copy of the value as not constant
-            v = Value(random.sample(tup - dictionary, 1))
-            dictionary.add(v)
-        return v
+            v = random.sample(dictionary, 1)
+        return Value(v)
 
     def one_of_unique_times(self, l, number):
-        origlist = l
-        while len(origlist) == 1 and isinstance(origlist[0], Value):
-            origlist = origlist[0].val
-        l = origlist
-        tup = frozenset(l)
-        if tup not in self.UNIQUE_DICTIONARY:
-            with self.UNIQUE_DICTIONARY_LOCK:
-                self.UNIQUE_DICTIONARY[tup] = set()
-                self.INDIVIDUAL_DICTIONARY_LOCKS[tup] = Lock()
+        global UNIQUE_DICTIONARY
+        global UNIQUE_DICTIONARY_LOCK
+        global INDIVIDUAL_DICTIONARY_LOCKS
 
-        with self.INDIVIDUAL_DICTIONARY_LOCKS[tup]:
-            dictionary = self.UNIQUE_DICTIONARY[tup]
-            if len(tup) < (len(dictionary) + number):
+        tup = frozenset(l)
+        with UNIQUE_DICTIONARY_LOCK:
+            if tup not in UNIQUE_DICTIONARY:
+                UNIQUE_DICTIONARY[tup] = set(l)
+                INDIVIDUAL_DICTIONARY_LOCKS[tup] = MANAGER.Lock()
+
+        with INDIVIDUAL_DICTIONARY_LOCKS[tup]:
+            dictionary = UNIQUE_DICTIONARY[tup]
+            if len(dictionary) < number:
                 raise EngineError("Required %d unique values cannot be generated!" % number)
             v = []
-            # Value() marks this copy of the value as not constant
-            for y in random.sample(tup - dictionary, number):
+            for y in random.sample(dictionary, number):
                 v.append(Value(y))
-            dictionary.update(v)
+                dictionary.remove(y)
+            UNIQUE_DICTIONARY[tup] = dictionary
         return v
 
     def __hash__(self):
@@ -117,7 +114,7 @@ class Number(Value):
         lower = int(x[0].val)
         upper = int(x[1].val)
         ran = random.randint
-        for _ in range(y):
+        for _ in repeat(None, y):
             res.append(Value(ran(lower, upper)))
         return res
 
@@ -133,7 +130,7 @@ class Number(Value):
         res = []
         upper = int(x[0].val)
         ran = random.randint
-        for _ in range(y):
+        for _ in repeat(None, y):
             res.append(Value(ran(0, upper)))
         return res
 
@@ -143,6 +140,17 @@ class Number(Value):
 
 class EngineError(Exception):
     pass
+
+def init_child(u, l, i, m):
+    global UNIQUE_DICTIONARY
+    global UNIQUE_DICTIONARY_LOCK
+    global INDIVIDUAL_DICTIONARY_LOCKS
+    global MANAGER
+
+    UNIQUE_DICTIONARY = u
+    UNIQUE_DICTIONARY_LOCK = l
+    INDIVIDUAL_DICTIONARY_LOCKS = i
+    MANAGER = m
 
 
 class Engine(AstVisitor):
@@ -167,7 +175,8 @@ class Engine(AstVisitor):
         # dump all the extra work on last thread
         work_times.append(times - (each_time * (cpu_count() - 1)))
         ast_list = [ast.val] * len(work_times)
-        pool = Pool(cpu_count())
+        manager = Manager()
+        pool = Pool(cpu_count(), init_child, (manager.dict(), manager.Lock(), manager.dict(), manager))
         ret = pool.starmap(self.visit_optional, zip(ast_list, work_times))
         pool.close()
         result = []
@@ -177,42 +186,55 @@ class Engine(AstVisitor):
 
     def visit_literal(self, ast, times):
         if ast.val.type == Token.INTEGER:
-            return [Value(int(ast.val.val), True)] * times
+            return repeat(Value(int(ast.val.val), True), times)
         else:
-            return [Value(str(ast.val.val.replace("\"", "")), True)] * times
+            return repeat(Value(str(ast.val.val.replace("\"", "")), True), times)
 
     def visit_variable(self, ast, times):
         if ast.val.val in self.defaultrules:
-            return [self.defaultrules[ast.val.val]] * times
+            return repeat(self.defaultrules[ast.val.val], times)
         elif ast.val.val in self.grammars:
             return self.visit_optional(self.grammars[ast.val.val], times)
         else:
             raise EngineError("No such rule found '%s'!" % ast.val.val)
 
+    def peek_one(self, iterable):
+        gen = iter(iterable)
+        peek = next(gen)
+        iterator = chain([peek], gen)
+        return (peek, iterator)
+
     def visit_method_call(self, ast, times):
         obj = self.visit_optional(ast.obj, times)
-        func = getattr(obj[0], ast.func.val, None)
+        obj0, obj = self.peek_one(obj)
+        func = getattr(obj0, ast.func.val, None)
         if not callable(func):
             raise EngineError("Invalid method name '%s'!" % ast.func)
         args = []
         arg_is_constant = True
         for arg in ast.args:
             temp = self.visit_optional(arg, times)
-            arg_is_constant = arg_is_constant and temp[0].is_constant
+            val, temp = self.peek_one(temp)
+            arg_is_constant = arg_is_constant and val.is_constant
             args.append(temp)
 
+        if arg_is_constant:
+            argsorted = repeat([next(y) for y in args], times)
+        else:
+            argsorted = zip(*args)
+
         res = []
-        argsorted = zip(*args)
-        if obj[0].is_constant:
+        if obj0.is_constant:
             if arg_is_constant:
                 bakfunc = func
-                func = getattr(obj[0], str(ast.func.val) + "_times", None)
+                func = getattr(obj0, str(ast.func.val) + "_times", None)
                 if not callable(func):
                     print("[Warning] Should've implemented '%s' on '%s'!"
-                          % (str(ast.func.val) + "_times", obj[0].__class__))
+                          % (str(ast.func.val) + "_times", obj0.__class__))
                     func = bakfunc
                 else:
-                    return func(next(argsorted), times)
+                    res = func(next(argsorted), times)
+                    return res
             for a in argsorted:
                 res.append(func(a))
         else:
