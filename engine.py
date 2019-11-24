@@ -1,9 +1,8 @@
 from my_parser import AstVisitor
 from scanner import Token
 import random
-from multiprocessing import Pool, cpu_count, Lock, Manager
 from itertools import repeat, chain
-
+from contextlib import nullcontext
 
 class Value:
 
@@ -152,13 +151,18 @@ def init_child(u, l, i, m):
     INDIVIDUAL_DICTIONARY_LOCKS = i
     MANAGER = m
 
+class NullManager:
+
+    def Lock(self):
+        return nullcontext()
 
 class Engine(AstVisitor):
 
-    def __init__(self):
+    def __init__(self, parallel=True):
         AstVisitor.__init__(self)
         self.defaultrules = {"value": Value('', True), "number": Number()}
         self.grammars = {}
+        self.on_parallel = parallel
         random.seed()
 
     def visit_assignment(self, ast):
@@ -167,22 +171,35 @@ class Engine(AstVisitor):
         # return ast.rhs.accept(self)
         # assignment no longer explicitly evaluates
 
-    def visit_print(self, ast):
+    def evaluate_parallel(self, ast):
+        from multiprocessing import Pool, cpu_count, Lock, Manager
+        workers = cpu_count()
         times = int(ast.times.val)
-        each_time = int(times / cpu_count())
+        each_time = int(times / workers)
         # equally divide work between count - 1 threads
-        work_times = [int(each_time)] * (cpu_count() - 1)
+        work_times = [int(each_time)] * (workers - 1)
         # dump all the extra work on last thread
-        work_times.append(times - (each_time * (cpu_count() - 1)))
+        work_times.append(times - (each_time * (workers - 1)))
         ast_list = [ast.val] * len(work_times)
         manager = Manager()
-        pool = Pool(cpu_count(), init_child, (manager.dict(), manager.Lock(), manager.dict(), manager))
+        pool = Pool(workers, init_child, (manager.dict(), manager.Lock(), manager.dict(), manager))
         ret = pool.starmap(self.visit_optional, zip(ast_list, work_times))
         pool.close()
         result = []
         for y in ret:
             result.extend(y)
         return result
+
+    def visit_print(self, ast):
+        if self.on_parallel:
+            try:
+                return self.evaluate_parallel(ast)
+            except ImportError:
+                pass
+        # either on_parallel is off or import failed
+        times = int(ast.times.val)
+        init_child({}, nullcontext(), {}, NullManager())
+        return self.visit_optional(ast.val, times)
 
     def visit_literal(self, ast, times):
         if ast.val.type == Token.INTEGER:
