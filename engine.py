@@ -95,6 +95,9 @@ class Value:
 
 class Number(Value):
 
+    def __init__(self):
+        Value.__init__(self, '', True)
+
     def between_times(self, x, y):
         if len(x) != 2:
             raise EngineError(
@@ -106,13 +109,13 @@ class Number(Value):
         return res
 
     def between(self, x):
-        if len(x) < 2:
+        if len(x) != 2:
             raise EngineError(
-                "number.between takes two arguments, 1 were given")
+                "number.between takes two arguments, %d were given" % len(x))
         return Value(random.randint(x[0].val, x[1].val))
 
     def upto_times(self, x, y):
-        if len(x) != 2:
+        if len(x) != 1:
             raise EngineError("upto takes one argument, %d were given" % len(x))
         upper = int(x[0].val)
         collection = random.choices(range(0, upper + 1), k=y)
