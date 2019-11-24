@@ -157,6 +157,10 @@ class Engine(AstVisitor):
         self.defaultrules = {"value": Value('', True), "number": Number()}
         self.grammars = {}
         self.on_parallel = parallel
+        self.method_dictionary = {Value: {"one_of": Value.one_of, "one_of_unique": Value.one_of_unique,
+                                          "append": Value.append, "lower": Value.lower,
+                                          "constant": Value.constant},
+                                  Number: {"upto": Number.upto, "between": Number.between}}
         random.seed()
 
     def visit_assignment(self, ast):
@@ -218,9 +222,12 @@ class Engine(AstVisitor):
     def visit_method_call(self, ast, times):
         obj = self.visit_optional(ast.obj, times)
         obj0, obj = self.peek_one(obj)
-        func = getattr(obj0, ast.func.val, None)
-        if not callable(func):
-            raise EngineError("Invalid method name '%s'!" % ast.func)
+        if obj0.__class__ not in self.method_dictionary:
+            raise EngineError("Invalid object type '%s'!" % str(obj0.__class__))
+        if ast.func.val not in self.method_dictionary[obj0.__class__]:
+            raise EngineError("Invalid method name '%s'!" % (ast.func))
+        func = self.method_dictionary[obj0.__class__][ast.func.val]
+
         args = []
         arg_is_constant = True
         for arg in ast.args:
@@ -247,8 +254,8 @@ class Engine(AstVisitor):
                     res = func(next(argsorted), times)
                     return res
             for a in argsorted:
-                res.append(func(a))
+                res.append(func(obj0, a))
         else:
             for o, a in zip(obj, argsorted):
-                res.append(getattr(o, ast.func.val)(a))
+                res.append(func(o, a))
         return res
