@@ -7,12 +7,8 @@ from contextlib import nullcontext
 class Value:
 
     def __init__(self, v='', const=False):
-        if isinstance(v, Value):
-            self.val = v.val
-            self.is_constant = const
-        else:
-            self.val = v
-            self.is_constant = const
+        self.val = v
+        self.is_constant = const
 
     def __str__(self):
         return str(self.val)
@@ -27,16 +23,16 @@ class Value:
         return repeat(self.append(x), y)
 
     def constant(self, x):
-        return Value(x[0], True)
+        return Value(x[0].val, True)
 
     def constant_times(self, x, y):
-        return repeat(Value(x[0], True), y)
+        return repeat(Value(x[0].val, True), y)
 
     def one_of(self, l):
         return Value(random.choice(l))
 
     def one_of_times(self, l, y):
-        res = [Value(val) for val in random.choices(l, k=y)]
+        res = [Value(val.val) for val in random.choices(l, k=y)]
         return res
 
     def lower(self):
@@ -63,7 +59,7 @@ class Value:
 
             # Value() marks this copy of the value as not constant
             v = random.sample(dictionary, 1)
-        return Value(v)
+        return Value(v.val)
 
     def one_of_unique_times(self, l, number):
         global UNIQUE_DICTIONARY
@@ -82,19 +78,15 @@ class Value:
                 raise EngineError("Required %d unique values cannot be generated!" % number)
             v = []
             for y in random.sample(dictionary, number):
-                v.append(Value(y))
+                v.append(Value(y.val))
                 dictionary.remove(y)
             UNIQUE_DICTIONARY[tup] = dictionary
         return v
 
     def __hash__(self):
-        if isinstance(self.val, Value):
-            return self.val.__hash__()
         return hash(self.val)
 
     def __eq__(self, y):
-        if isinstance(self.val, Value):
-            return self.val.__eq__(y)
         return self.val == y.val
 
     def __repr__(self):
