@@ -36,9 +36,7 @@ class Value:
         return Value(random.choice(l))
 
     def one_of_times(self, l, y):
-        res = []
-        for _ in repeat(None, y):
-            res.append(Value(random.choice(l)))
+        res = [Value(val) for val in random.choices(l, k=y)]
         return res
 
     def lower(self):
@@ -109,12 +107,10 @@ class Number(Value):
         if len(x) != 2:
             raise EngineError(
                 "number.between takes two arguments, %d were given" % len(x))
-        res = []
         lower = int(x[0].val)
         upper = int(x[1].val)
-        ran = random.randint
-        for _ in repeat(None, y):
-            res.append(Value(ran(lower, upper)))
+        collection = random.choices(range(lower, upper + 1), k=y)
+        res = [Value(val) for val in collection]
         return res
 
     def between(self, x):
@@ -126,11 +122,9 @@ class Number(Value):
     def upto_times(self, x, y):
         if len(x) != 2:
             raise EngineError("upto takes one argument, %d were given" % len(x))
-        res = []
         upper = int(x[0].val)
-        ran = random.randint
-        for _ in repeat(None, y):
-            res.append(Value(ran(0, upper)))
+        collection = random.choices(range(0, upper + 1), k=y)
+        res = [Value(val) for val in collection]
         return res
 
     def upto(self, x):
