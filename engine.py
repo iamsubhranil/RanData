@@ -154,12 +154,13 @@ class AstFlatter(AstVisitor):
 
 class Engine(AstVisitor):
 
-    def __init__(self, parallel=True):
+    def __init__(self, generate_only=False, processes=-1):
         AstVisitor.__init__(self)
         self.defaultrules = {"value": '', "number": 0}
         self.grammars = {}
         self.flatter = AstFlatter()
-        self.on_parallel = parallel
+        self.num_process = processes
+        self.generate_only = generate_only
         self.method_dictionary = {str: {"one_of": one_of, "one_of_unique": one_of_unique,
                                           "append": append, "lower": lower,
                                           "constant": constant},
@@ -178,7 +179,9 @@ class Engine(AstVisitor):
 
     def evaluate_parallel(self, ast):
         from multiprocessing import Pool, cpu_count, RLock, Manager
-        workers = cpu_count()
+        workers = self.num_process
+        if workers == -1:
+            workers = cpu_count()
         times = int(ast.times.val)
         each_time = int(times / workers)
         # equally divide work between count - 1 threads
@@ -194,20 +197,24 @@ class Engine(AstVisitor):
 
         ret = pool.starmap(self.visit_optional, zip(ast_list, work_times))
         pool.close()
-        result = []
-        for y in ret:
-            result.extend(y[0])
-        return result
+        if not self.generate_only:
+            result = []
+            for y in ret:
+                result.extend(y[0])
+            return result
 
     def visit_print(self, ast):
         ast = self.flatter.visit_print(ast)
         times = int(ast.times.val)
-        if times > 10000 and self.on_parallel:
+        if times > 10000 or self.num_process != -1:
             try:
                 return self.evaluate_parallel(ast)
             except ImportError:
+                if self.num_process != -1:
+                    print("[Info] Python in this system does not support multiprocessing!\n"
+                          "Falling back to single process!")
                 pass
-        # either on_parallel is off or import failed
+        # either times < 10000 or import failed
         init_child({}, nullcontext())
         ret = self.visit_optional(ast.val, times)[0]
         #print(ret)
