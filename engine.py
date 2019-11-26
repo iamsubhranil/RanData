@@ -1,4 +1,4 @@
-from my_parser import AstVisitor
+from my_parser import AstVisitor, MethodCallExpression, PrintStatement
 from scanner import Token
 import random
 from itertools import repeat, chain
@@ -140,6 +140,35 @@ class NullManager:
     def Lock(self):
         return nullcontext()
 
+class AstFlatter(AstVisitor):
+
+    def __init__(self, grammars={}):
+        AstVisitor.__init__(self, True)
+        self.grammars = grammars
+
+    def visit_assignment(self, ast):
+        self.grammars[ast.lhs.val] = self.visit(ast.rhs)
+        return self.grammars[ast.lhs.val]
+
+    def visit_literal(self, ast):
+        return ast
+
+    def visit_variable(self, ast):
+        if ast.val.val in self.grammars:
+            return self.grammars[ast.val.val]
+        return ast
+
+    def visit_method_call(self, ast):
+        obj = self.visit(ast.obj)
+        func = ast.func
+        args = []
+        for a in ast.args:
+            args.append(self.visit(a))
+        return MethodCallExpression(obj, func, args)
+
+    def visit_print(self, ast):
+        val = self.visit(ast.val)
+        return PrintStatement(ast.times, val)
 
 class Engine(AstVisitor):
 
@@ -147,6 +176,7 @@ class Engine(AstVisitor):
         AstVisitor.__init__(self)
         self.defaultrules = {"value": '', "number": 0}
         self.grammars = {}
+        self.flatter = AstFlatter()
         self.on_parallel = parallel
         self.method_dictionary = {str: {"one_of": one_of, "one_of_unique": one_of_unique,
                                           "append": append, "lower": lower,
@@ -159,7 +189,7 @@ class Engine(AstVisitor):
         random.seed()
 
     def visit_assignment(self, ast):
-        self.grammars[ast.lhs.val] = ast.rhs
+        self.grammars[ast.lhs.val] = self.flatter.visit(ast)
         return None
         # return ast.rhs.accept(self)
         # assignment no longer explicitly evaluates
@@ -188,6 +218,7 @@ class Engine(AstVisitor):
         return result
 
     def visit_print(self, ast):
+        ast = self.flatter.visit_print(ast)
         times = int(ast.times.val)
         if times > 10000 and self.on_parallel:
             try:
