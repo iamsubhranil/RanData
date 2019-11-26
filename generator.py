@@ -4,23 +4,28 @@ from engine import Engine
 import sys
 import argparse
 import time
-from multiprocessing import cpu_count
+
 
 def check_positive(value):
     try:
         ivalue = int(value)
         if ivalue <= 0:
-            raise argparse.ArgumentTypeError("Number of processes should be positive!")
+            raise argparse.ArgumentTypeError(
+                "Number of processes should be positive!")
         return ivalue
     except ValueError:
-        raise argparse.ArgumentTypeError("Number of processes should be an integer!")
+        raise argparse.ArgumentTypeError(
+            "Number of processes should be an integer!")
+
 
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     group = parser.add_mutually_exclusive_group()
-    parser.add_argument('input_file', nargs=1, help="input file to read the format from")
-    group.add_argument('output_file', nargs='?', help="file to save generated data (default is stdout)")
+    parser.add_argument('input_file', nargs=1,
+                        help="input file to read the format from")
+    group.add_argument('output_file', nargs='?',
+                       help="file to save generated data (default is stdout)")
     group.add_argument('-g', '--generate', action='store_true', required=False,
                        help="generate, but don't write the generated data")
     parser.add_argument('-p', '--process', default=[-1], nargs=1, required=False,
@@ -53,7 +58,8 @@ if __name__ == "__main__":
                     for s in r:
                         res.append(s)
             if given.time:
-                print("Time elapsed: %0.5f" % (time.perf_counter() - start) + "s")
+                print("Time elapsed: %0.5f" %
+                      (time.perf_counter() - start) + "s")
 
         if given.generate == False:
             if given.output_file != None:

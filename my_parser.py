@@ -80,7 +80,8 @@ class AstVisitor(ABC):
             func = self.VISITOR_METHODS[ast.__class__]
             res = func(ast)
             if self.debug:
-                print(str(func.__name__) + "(" + str(ast) + ")" + " => " + str(res))
+                print(str(func.__name__) +
+                      "(" + str(ast) + ")" + " => " + str(res))
             return res
         else:
             if len(self.VISITOR_METHODS) == 0:
@@ -95,7 +96,8 @@ class AstVisitor(ABC):
             func = self.VISITOR_METHODS[ast.__class__]
             res = func(ast, optional)
             if self.debug:
-                print(str(func.__name__) + "(" + str(ast) + ", " + str(optional) + ")" + " => " + str(res))
+                print(str(func.__name__) + "(" + str(ast) + ", " +
+                      str(optional) + ")" + " => " + str(res))
             return res
         else:
             if len(self.VISITOR_METHODS) == 0:

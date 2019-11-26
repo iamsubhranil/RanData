@@ -4,40 +4,61 @@ import random
 from itertools import repeat, chain
 from contextlib import nullcontext
 
-# append is called when either the
-# collection stored here is not constant
-# or the argument is not, so in either
-# case, we just need to append one to one
+
 def append(x, y):
+    # append is called when either the
+    # collection stored here is not constant
+    # or the argument is not, so in either
+    # case, we just need to append one to one
     ret = str(x)
     for i in y:
         ret += str(i)
     return ([ret], False)
 
+
 def append_times(w, x, y):
     # unpack the raw value, and mark the
     # returning one as constant
-    return (repeat(append(w, x).val[0], y), True)
+    return (repeat(append(w, x)[0][0], y), True)
 
-# arguments are unpacked now
+
+def append_one_to_many(w, x):
+    # append one w to many x
+    base = str(w)
+    ret = []
+    for one in x:
+        together = base
+        for val in one:
+            together += str(val)
+        ret.append(together)
+    return (ret, False)
+
+
 def constant(w, x):
+    # arguments are unpacked now
     return ([x], True)
+
 
 def constant_times(w, x, y):
     return (repeat(x[0], y), True)
 
+
 def one_of(w, l):
     return ([random.choice(l)], False)
+
 
 def one_of_times(w, l, y):
     res = random.choices(l, k=y)
     return (res, False)
 
+
 def lower(w):
     return ([str(w).lower()], False)
 
+
 def lower_times(x, y):
     return (repeat(str(x).lower(), y), True)
+
 
 def one_of_unique(x, l):
     global UNIQUE_DICTIONARY
@@ -59,6 +80,7 @@ def one_of_unique(x, l):
         UNIQUE_DICTIONARY[tup] = dictionary
     return ([v], False)
 
+
 def one_of_unique_times(x, l, number):
     global UNIQUE_DICTIONARY
     global UNIQUE_DICTIONARY_LOCK
@@ -78,6 +100,7 @@ def one_of_unique_times(x, l, number):
         UNIQUE_DICTIONARY[tup] = dictionary
     return (v, False)
 
+
 def between_times(w, x, y):
     if len(x) != 2:
         raise EngineError(
@@ -87,11 +110,13 @@ def between_times(w, x, y):
     collection = random.choices(range(lower, upper + 1), k=y)
     return (collection, False)
 
+
 def between(w, x):
     if len(x) != 2:
         raise EngineError(
             "number.between takes two arguments, %d were given" % len(x))
     return ([random.randint(x[0], x[1])], False)
+
 
 def upto_times(w, x, y):
     if len(x) != 1:
@@ -100,6 +125,7 @@ def upto_times(w, x, y):
     upper = int(x[0])
     collection = random.choices(range(0, upper + 1), k=y)
     return (collection, False)
+
 
 def upto(w, x):
     return ([random.randint(0, x[0])], False)
@@ -121,6 +147,7 @@ class NullManager:
 
     def Lock(self):
         return nullcontext()
+
 
 class AstFlatter(AstVisitor):
 
@@ -152,6 +179,7 @@ class AstFlatter(AstVisitor):
         val = self.visit(ast.val)
         return PrintStatement(ast.times, val)
 
+
 class Engine(AstVisitor):
 
     def __init__(self, generate_only=False, processes=-1):
@@ -162,13 +190,17 @@ class Engine(AstVisitor):
         self.num_process = processes
         self.generate_only = generate_only
         self.method_dictionary = {str: {"one_of": one_of, "one_of_unique": one_of_unique,
-                                          "append": append, "lower": lower,
-                                          "constant": constant},
+                                        "append": append, "lower": lower,
+                                        "constant": constant},
                                   int: {"upto": upto, "between": between}}
-        self.vector_method_dictionary = {"one_of" : one_of_times, "one_of_unique": one_of_unique_times,
+        self.vector_method_dictionary = {"one_of": one_of_times, "one_of_unique": one_of_unique_times,
                                          "append": append_times, "lower": lower_times,
                                          "constant": constant_times, "upto": upto_times,
                                          "between": between_times}
+        self.one_to_many_method_dictionary = {"one_of": one_of_times, "one_of_unique": one_of_unique_times,
+                                              "append": append_one_to_many, "lower": lower_times,
+                                              "constant": constant_times, "upto": upto_times,
+                                              "between": between_times}
         random.seed()
 
     def visit_assignment(self, ast):
@@ -206,7 +238,7 @@ class Engine(AstVisitor):
     def visit_print(self, ast):
         ast = self.flatter.visit_print(ast)
         times = int(ast.times.val)
-        if times > 10000 or self.num_process != -1:
+        if times > 10000 and self.num_process != 1:
             try:
                 return self.evaluate_parallel(ast)
             except ImportError:
@@ -217,7 +249,7 @@ class Engine(AstVisitor):
         # either times < 10000 or import failed
         init_child({}, nullcontext())
         ret = self.visit_optional(ast.val, times)[0]
-        #print(ret)
+        # print(ret)
         return ret
 
     def visit_literal(self, ast, times):
@@ -277,20 +309,26 @@ class Engine(AstVisitor):
                     # returns a Value wrapper over the collection
                     res = func(obj0, next(argsorted), times)
                     return res
-            for a in argsorted:
-                # obj is constant but arg is not,
-                # so we call the obj0 with one set
-                # of arg each time, which should
-                # return a Value wrapper containing
-                # one child
-                res.append(func(obj0, a)[0][0])
+            if ast.func.val not in self.one_to_many_method_dictionary:
+                print("[Warning] Should've implemented '%s' on '%s'!"
+                      % (str(ast.func.val) + "_one_to_many", obj0.__class__))
+                for a in argsorted:
+                    # obj is constant but arg is not,
+                    # so we call the obj0 with one set
+                    # of arg each time, which should
+                    # return the wrapper containing
+                    # one child
+                    res.append(func(obj0, a)[0][0])
+            else:
+                func = self.one_to_many_method_dictionary[ast.func.val]
+                res.extend(func(obj0, argsorted)[0])
         else:
             for o, a in zip(obj[0], argsorted):
                 # None of obj and arg is constant,
                 # so we call each obj with one arg
                 # each time, which should also return
-                # a Value wrapper containing one child
+                # the wrapper containing one child
                 res.append(func(o, a)[0][0])
-        # Finally, wrap the result on a Value
+        # Finally, wrap the result on a tuple
         # and mark it as not constant
         return (res, False)
