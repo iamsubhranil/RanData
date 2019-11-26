@@ -15,6 +15,9 @@ class AssignmentStatement(Ast):
         self.equal = equal
         self.rhs = rhs
 
+    def __str__(self):
+        return str(self.lhs) + " = " + str(self.rhs)
+
 
 class MethodCallExpression(Ast):
 
@@ -23,14 +26,17 @@ class MethodCallExpression(Ast):
         self.func = func
         self.args = tuple(args)
 
+    def __str__(self):
+        return str(self.obj) + "." + str(self.func) + str(tuple([str(arg) for arg in self.args]))
+
 
 class LiteralExpression(Ast):
 
     def __init__(self, val):
         self.val = val
 
-    def __repr__(self):
-        return "LiteralExpression(" + str(self.val) + ")"
+    def __str__(self):
+        return str(self.val)
 
 
 class VariableExpression(Ast):
@@ -38,8 +44,8 @@ class VariableExpression(Ast):
     def __init__(self, val):
         self.val = val
 
-    def __repr__(self):
-        return "LiteralExpression(" + str(self.val) + ")"
+    def __str__(self):
+        return str(self.val)
 
 
 class PrintStatement(Ast):
@@ -47,6 +53,9 @@ class PrintStatement(Ast):
     def __init__(self, times, val):
         self.times = times
         self.val = val
+
+    def __str__(self):
+        return "print(" + str(self.times) + ", " + str(self.val) + ")"
 
 
 class VisitorError(Exception):
@@ -57,17 +66,22 @@ class AstVisitor(ABC):
 
     VISITOR_METHODS = {}
 
-    def __init__(self):
+    def __init__(self, debug=False):
         self.VISITOR_METHODS = {LiteralExpression: self.visit_literal,
                                 MethodCallExpression: self.visit_method_call,
                                 AssignmentStatement: self.visit_assignment,
                                 VariableExpression: self.visit_variable,
                                 PrintStatement: self.visit_print,
                                 Ast: self.visit_ast}
+        self.debug = debug
 
     def visit(self, ast):
         if ast.__class__ in self.VISITOR_METHODS:
-            return self.VISITOR_METHODS[ast.__class__](ast)
+            func = self.VISITOR_METHODS[ast.__class__]
+            res = func(ast)
+            if self.debug:
+                print(str(func.__name__) + "(" + str(ast) + ")" + " => " + str(res))
+            return res
         else:
             if len(self.VISITOR_METHODS) == 0:
                 raise VisitorError(
@@ -78,7 +92,11 @@ class AstVisitor(ABC):
 
     def visit_optional(self, ast, optional=None):  # allow to pass optional data
         if ast.__class__ in self.VISITOR_METHODS:
-            return self.VISITOR_METHODS[ast.__class__](ast, optional)
+            func = self.VISITOR_METHODS[ast.__class__]
+            res = func(ast, optional)
+            if self.debug:
+                print(str(func.__name__) + "(" + str(ast) + ", " + str(optional) + ")" + " => " + str(res))
+            return res
         else:
             if len(self.VISITOR_METHODS) == 0:
                 raise VisitorError(
