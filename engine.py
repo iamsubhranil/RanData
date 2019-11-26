@@ -28,8 +28,9 @@ class Value:
 # case, we just need to append one to one
 def append(x, y):
     ret = str(x)
-    res = ''.join([str(i) for i in y])
-    return Value([ret + res])
+    for i in y:
+        ret += str(i)
+    return Value([ret])
 
 def append_times(w, x, y):
     # unpack the raw value, and mark the
