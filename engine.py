@@ -188,13 +188,13 @@ class Engine(AstVisitor):
         return result
 
     def visit_print(self, ast):
-        if self.on_parallel:
+        times = int(ast.times.val)
+        if times > 10000 and self.on_parallel:
             try:
                 return self.evaluate_parallel(ast)
             except ImportError:
                 pass
         # either on_parallel is off or import failed
-        times = int(ast.times.val)
         init_child({}, nullcontext())
         ret = self.visit_optional(ast.val, times).val
         #print(ret)
