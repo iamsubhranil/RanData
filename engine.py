@@ -4,24 +4,6 @@ import random
 from itertools import repeat, chain
 from contextlib import nullcontext
 
-
-class Value:
-
-    def __init__(self, v=[], const=False):
-        # val now contains a collection of
-        # raw values of same type, and
-        # is_constant marks the whole set
-        # of values either constant or not
-        self.val = v
-        self.is_constant = const
-
-    def __str__(self):
-        return str(self.val)
-
-    def __repr__(self):
-        return "Value(" + str(self.val) + ")"
-
-
 # append is called when either the
 # collection stored here is not constant
 # or the argument is not, so in either
@@ -30,32 +12,32 @@ def append(x, y):
     ret = str(x)
     for i in y:
         ret += str(i)
-    return Value([ret])
+    return ([ret], False)
 
 def append_times(w, x, y):
     # unpack the raw value, and mark the
     # returning one as constant
-    return Value(repeat(append(w, x).val[0], y), True)
+    return (repeat(append(w, x).val[0], y), True)
 
 # arguments are unpacked now
 def constant(w, x):
-    return Value([x], True)
+    return ([x], True)
 
 def constant_times(w, x, y):
-    return Value(repeat(x[0], y), True)
+    return (repeat(x[0], y), True)
 
 def one_of(w, l):
-    return Value([random.choice(l)])
+    return ([random.choice(l)], False)
 
 def one_of_times(w, l, y):
     res = random.choices(l, k=y)
-    return Value(res)
+    return (res, False)
 
 def lower(w):
-    return Value([str(w).lower()])
+    return ([str(w).lower()], False)
 
 def lower_times(x, y):
-    return Value(repeat(str(x).lower(), y), True)
+    return (repeat(str(x).lower(), y), True)
 
 def one_of_unique(x, l):
     global UNIQUE_DICTIONARY
@@ -75,7 +57,7 @@ def one_of_unique(x, l):
         dictionary.remove(v)
 
         UNIQUE_DICTIONARY[tup] = dictionary
-    return Value([v])
+    return ([v], False)
 
 def one_of_unique_times(x, l, number):
     global UNIQUE_DICTIONARY
@@ -94,7 +76,7 @@ def one_of_unique_times(x, l, number):
         dictionary.difference_update(v)
 
         UNIQUE_DICTIONARY[tup] = dictionary
-    return Value(v)
+    return (v, False)
 
 def between_times(w, x, y):
     if len(x) != 2:
@@ -103,13 +85,13 @@ def between_times(w, x, y):
     lower = int(x[0])
     upper = int(x[1])
     collection = random.choices(range(lower, upper + 1), k=y)
-    return Value(collection)
+    return (collection, False)
 
 def between(w, x):
     if len(x) != 2:
         raise EngineError(
             "number.between takes two arguments, %d were given" % len(x))
-    return Value([random.randint(x[0], x[1])])
+    return ([random.randint(x[0], x[1])], False)
 
 def upto_times(w, x, y):
     if len(x) != 1:
@@ -117,10 +99,10 @@ def upto_times(w, x, y):
             "upto takes one argument, %d were given" % len(x))
     upper = int(x[0])
     collection = random.choices(range(0, upper + 1), k=y)
-    return Value(collection)
+    return (collection, False)
 
 def upto(w, x):
-    return Value([random.randint(0, x[0])])
+    return ([random.randint(0, x[0])], False)
 
 
 class EngineError(Exception):
@@ -143,7 +125,7 @@ class NullManager:
 class AstFlatter(AstVisitor):
 
     def __init__(self, grammars={}):
-        AstVisitor.__init__(self, True)
+        AstVisitor.__init__(self)
         self.grammars = grammars
 
     def visit_assignment(self, ast):
@@ -214,7 +196,7 @@ class Engine(AstVisitor):
         pool.close()
         result = []
         for y in ret:
-            result.extend(y.val)
+            result.extend(y[0])
         return result
 
     def visit_print(self, ast):
@@ -227,19 +209,19 @@ class Engine(AstVisitor):
                 pass
         # either on_parallel is off or import failed
         init_child({}, nullcontext())
-        ret = self.visit_optional(ast.val, times).val
+        ret = self.visit_optional(ast.val, times)[0]
         #print(ret)
         return ret
 
     def visit_literal(self, ast, times):
         if ast.val.type == Token.INTEGER:
-            return Value(repeat(int(ast.val.val), times), True)
+            return (repeat(int(ast.val.val), times), True)
         else:
-            return Value(repeat(str(ast.val.val.replace("\"", "")), times), True)
+            return (repeat(str(ast.val.val.replace("\"", "")), times), True)
 
     def visit_variable(self, ast, times):
         if ast.val.val in self.defaultrules:
-            return Value(repeat(self.defaultrules[ast.val.val], times), True)
+            return (repeat(self.defaultrules[ast.val.val], times), True)
         elif ast.val.val in self.grammars:
             return self.visit_optional(self.grammars[ast.val.val], times)
         else:
@@ -253,7 +235,8 @@ class Engine(AstVisitor):
 
     def visit_method_call(self, ast, times):
         obj = self.visit_optional(ast.obj, times)
-        obj0, obj.val = self.peek_one(obj.val)
+        obj0, lst = self.peek_one(obj[0])
+        obj = (lst, obj[1])
         if obj0.__class__ not in self.method_dictionary:
             raise EngineError("Invalid object type '%s'!" %
                               str(obj0.__class__))
@@ -267,9 +250,9 @@ class Engine(AstVisitor):
             # temp now contains a collection of similar values
             # which maybe marked as a constant
             temp = self.visit_optional(arg, times)
-            arg_is_constant = arg_is_constant and temp.is_constant
+            arg_is_constant = arg_is_constant and temp[1]
             # extract the raw collection and store it as argument
-            args.append(temp.val)
+            args.append(temp[0])
 
         if arg_is_constant:
             argsorted = repeat([next(y) for y in args], times)
@@ -277,7 +260,7 @@ class Engine(AstVisitor):
             argsorted = zip(*args)
 
         res = []
-        if obj.is_constant:
+        if obj[1]:
             if arg_is_constant:
                 if ast.func.val not in self.vector_method_dictionary:
                     print("[Warning] Should've implemented '%s' on '%s'!"
@@ -293,14 +276,14 @@ class Engine(AstVisitor):
                 # of arg each time, which should
                 # return a Value wrapper containing
                 # one child
-                res.append(func(obj0, a).val[0])
+                res.append(func(obj0, a)[0][0])
         else:
-            for o, a in zip(obj.val, argsorted):
+            for o, a in zip(obj[0], argsorted):
                 # None of obj and arg is constant,
                 # so we call each obj with one arg
                 # each time, which should also return
                 # a Value wrapper containing one child
-                res.append(func(o, a).val[0])
+                res.append(func(o, a)[0][0])
         # Finally, wrap the result on a Value
         # and mark it as not constant
-        return Value(res, False)
+        return (res, False)
