@@ -28,25 +28,20 @@ Assignment statements basically maps a rule to a given expression. When a rule
 is encountered in either a print statement or in another expression, it's 
 corresponding definiton is looked for in the rule map. If found, the engine 
 re-evalutes the rule, and returns the result. Otherwise, an error is triggered.
-Two predefined rules are there, namely 'number' and 'value'. They don't 
-directly evalute to anything, but methods can be called upon them.
 
 ## Expression
 ```
-STRING | INTEGER | rule.method_name(expression)
+STRING | INTEGER | function_name(expression)
 ```
-An expression is the atomic unit of execution. For a string or an integer, 
-their corresponding value is wrapped in a Value class and that is returned. 
-For a method call, first, the object is looked up to be a rule, and is 
-evaluted correspondingly. If the object is 'number' or 'value', then the 
-method is directly called, if exists. Otherwise the rule is evaluted, and 
-then the method is dispatched upon the returned object.
+An expression is the atomic unit of execution. All RHS's of assignment 
+statements have to be a valid expression. Available functions to use in RanData 
+are listed below.
 
-## Default methods
+## Available functions
 
-1. value.append(arg (, arg)*) : appends the arguments to the value
-2. value.one_of(arg, (, arg)*) : returns one random value from the arguments
-3. value.one_of_unique(arg, (, arg)*) : returns one random, but unique, value 
+1. append(arg (, arg)*) : joins all the arguments in a string
+2. one_of(arg, (, arg)*) : returns one random value from the arguments
+3. one_of_unique(arg, (, arg)*) : returns one random, but unique, value 
                         at subsequent calls from the arguments
-4. number.between(x, y) : returns a number between (x, y)
-5. number.upto(x) : returns a number between [0, x]
+4. number_between(x, y) : returns a number between (x, y)
+5. number_upto(x) : returns a number between [0, x]

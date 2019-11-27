@@ -19,15 +19,14 @@ class AssignmentStatement(Ast):
         return str(self.lhs) + " = " + str(self.rhs)
 
 
-class MethodCallExpression(Ast):
+class FunctionCallExpression(Ast):
 
-    def __init__(self, obj, func, args):
-        self.obj = obj
+    def __init__(self, func, args):
         self.func = func
         self.args = tuple(args)
 
     def __str__(self):
-        return str(self.obj) + "." + str(self.func) + str(tuple([str(arg) for arg in self.args]))
+        return str(self.func) + str(tuple([str(arg) for arg in self.args]))
 
 
 class LiteralExpression(Ast):
@@ -68,7 +67,7 @@ class AstVisitor(ABC):
 
     def __init__(self, debug=False):
         self.VISITOR_METHODS = {LiteralExpression: self.visit_literal,
-                                MethodCallExpression: self.visit_method_call,
+                                FunctionCallExpression: self.visit_function_call,
                                 AssignmentStatement: self.visit_assignment,
                                 VariableExpression: self.visit_variable,
                                 PrintStatement: self.visit_print,
@@ -119,7 +118,7 @@ class AstVisitor(ABC):
         pass
 
     @abstractmethod
-    def visit_method_call(self, ast):
+    def visit_function_call(self, ast):
         pass
 
     @abstractmethod
@@ -146,9 +145,8 @@ class PrettyPrinter(AstVisitor):
     def visit_variable(self, ast):
         print(ast.val, end='')
 
-    def visit_method_call(self, ast):
-        ast.obj.accept(self)
-        print("." + str(ast.func) + "(", end='')
+    def visit_function_call(self, ast):
+        print(str(ast.func) + "(", end='')
         if len(ast.args) > 0:
             ast.args[0].accept(self)
             for arg in ast.args[1:]:
@@ -216,31 +214,24 @@ class Parser:
         return AssignmentStatement(token, equals, expr)
 
     def parse_expression(self):
-        return self.parse_method_call()
+        return self.parse_primary()
 
     def parse_primary(self):
         token = self.scanner.scan_next()
         if token.type == Token.INTEGER or token.type == Token.STRING:
             return LiteralExpression(token)
         elif token.type == Token.IDENTIFIER:
+            if self.scanner.match("("):
+                args = []
+                if not self.scanner.match(")"):
+
+                    args.append(self.parse_expression())
+
+                    while not self.scanner.match(")"):
+                        self.consume(
+                            Token.COMMA, "Expected ',' after argument!")
+                        args.append(self.parse_expression())
+                return FunctionCallExpression(token, args)
             return VariableExpression(token)
         else:
             raise ParseError("Invalid token '%s'", token)
-
-    def parse_method_call(self):
-        left = self.parse_primary()
-        while self.scanner.match("."):
-            name = self.consume(Token.IDENTIFIER, "Expected function name!")
-            self.consume(Token.BRACE_OPEN,
-                         "Expected brace open before function call!")
-            args = []
-            if not self.scanner.match(")"):
-
-                args.append(self.parse_expression())
-
-                while not self.scanner.match(")"):
-                    self.consume(
-                        Token.COMMA, "Expected ',' after argument!")
-                    args.append(self.parse_expression())
-            left = MethodCallExpression(left, name, args)
-        return left

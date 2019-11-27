@@ -1,11 +1,9 @@
 name = full_name
 cust_address = address
-phone_no = number.between(1111111111, 9999999999)
-total_spent = number.upto(5000)
-q = value.constant("'")
-c = value.constant(",")
-pretext = value.constant("INSERT INTO `customer`(`name`, `address`, `areaid`, `number`, `total_spent`) VALUES (")
-close = value.constant(");")
-areaid = number.between(1, 50)
-statement = pretext.append("'", name, "', '", address, "', ", areaid, ", ", phone_no, ", ", total_spent, close)
+phone_no = number_between(1111111111, 9999999999)
+total_spent = number_upto(5000)
+pretext = "INSERT INTO `customer`(`name`, `address`, `areaid`, `number`, `total_spent`) VALUES ("
+close = ");"
+areaid = number_between(1, 50)
+statement = append(pretext, "'", name, "', '", address, "', ", areaid, ", ", phone_no, ", ", total_spent, close)
 print(1000000, statement)

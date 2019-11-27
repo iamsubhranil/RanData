@@ -1,8 +1,4 @@
-space = value.constant(" ")
-underscore = value.constant("_")
-attherate = value.constant("@")
-dotcom = value.constant(".com")
-first_name = value.one_of(
+first_name = one_of(
 "Marvis", "Loura", "Lashunda", "Elwanda", "Birgit", "Marvella", "Deb", "Sallie",
     "Dusti", "Caren", "Audrea", "Laurena", "Zelda", "Alphonse", "Susanna", "Soraya",
     "Fern", "Carmela",
@@ -39,7 +35,7 @@ first_name = value.one_of(
 "Gina",
 "Jeanetta")
 
-last_name = value.one_of(
+last_name = one_of(
 "Smith",
 "Johnson",
 "Williams",
@@ -141,7 +137,7 @@ last_name = value.one_of(
 "Diaz",
 "Hayes")
 
-address = value.one_of(
+address = one_of(
   "777 Brockton Avenue, Abington MA 2351",
   "30 Memorial Drive, Avon MA 2322",
   "250 Hartford Avenue, Bellingham MA 2019",
@@ -193,7 +189,7 @@ address = value.one_of(
   "4133 Veterans Memorial Drive, Batavia NY 14020",
   "6265 Brockport Spencerport Rd, Brockport NY 14420")
 
-area = value.one_of(
+area = one_of(
   "Abington",
   "Avon",
   "Bellingham",
@@ -245,8 +241,8 @@ area = value.one_of(
   "Batavia",
   "Brockport")
 
-full_name = first_name.append(space, last_name)
+full_name = append(first_name, " ", last_name)
 
-domain = value.one_of("gmail", "yahoo", "hotmail", "outlook")
-gender = value.one_of("Male", "Female", "Other")
-email = first_name.lower().append(underscore, last_name.lower(), attherate, domain, dotcom)
+domain = one_of("gmail", "yahoo", "hotmail", "outlook")
+gender = one_of("Male", "Female", "Other")
+email = append(lower(first_name), "_", lower(last_name), "@", domain, ".com")
