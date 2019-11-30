@@ -84,7 +84,7 @@ def between_times(x, y):
 
 
 def between(y, r):
-    return ([r.randint(x[0], x[1]) for x in y], False)
+    return ([(x[0] + int((x[1] - x[0])*r.random())) for x in y], False)
 
 
 def upto_times(x, y):
