@@ -7,6 +7,7 @@ import random
 from string import ascii_letters, digits, punctuation, whitespace
 from itertools import repeat
 import sys
+import time
 
 finalset = ascii_letters + digits + punctuation
 r = random
@@ -59,7 +60,9 @@ def generate_random_string_list(r, finalset, wordlength=100, numwords=100):
 def test_append(times,  numlists=100):
     for _ in range(times):
         s = [generate_random_string_list(r, finalset) for _ in range(numlists)]
+        elapsed = time.perf_counter()
         reslist = append(s, r)[0] # select only the result
+        elapsed = time.perf_counter() - elapsed
         if len(reslist) != len(s):
             errstr = "Expected length %d, received %d" % (len(s), len(reslist))
             yield (False, errstr)
@@ -71,13 +74,15 @@ def test_append(times,  numlists=100):
                     errstr = "String not matched!"
                     success = False
                     break
-            yield (success, errstr)
+            yield (success, errstr, elapsed)
 
 def test_append_times(times, numlists=100):
     for _ in range(times):
         s = generate_random_string_list(r, finalset)
         result = ''.join(s)
+        elapsed = time.perf_counter()
         reslist = append_times([s], (numlists, r))[0]
+        elapsed = time.perf_counter() - elapsed
         success = True
         errstr = ''
         while numlists > 0:
@@ -92,13 +97,15 @@ def test_append_times(times, numlists=100):
                 errstr = "Unexpected end of list!"
                 success = False
                 break
-        yield (success, errstr)
+        yield (success, errstr, elapsed)
 
 
 def test_between(times, numlists=100):
     for _ in range(times):
         ranges = [(random.randint(100, 500), random.randint(500, 1000)) for _ in range(numlists)]
+        elapsed = time.perf_counter()
         res = between(ranges, r)[0]
+        elapsed = time.perf_counter() - elapsed
         if len(ranges) != len(res):
             errstr = "Unexpected length!"
             yield (False, errstr)
@@ -111,14 +118,16 @@ def test_between(times, numlists=100):
                     errstr = "%d is not between(%d, %d)!" % (int(x[1]), int(x[0][0]), int(x[0][1]))
                     success = False
                     break
-            yield (success, errstr)
+            yield (success, errstr, elapsed)
 
 def test_between_times(times, numlists=100):
     for _ in range(times):
         down = random.randint(100, 500)
         up = random.randint(500, 1000)
         ranges = (down, up)
+        elapsed = time.perf_counter()
         res = between_times(ranges, (numlists, r))[0]
+        elapsed = time.perf_counter() - elapsed
         if len(res) != numlists:
             errstr = "Unexpected length!"
             yield (False, errstr)
@@ -130,12 +139,14 @@ def test_between_times(times, numlists=100):
                     errstr = "%d is not between(%d, %d)" % (x, down, up)
                     success = False
                     break
-            yield (success, errstr)
+            yield (success, errstr, elapsed)
 
 def test_one_of(times, numlist=100):
     for _ in range(times):
         sources = [generate_random_string_list(r, finalset) for _ in range(numlist)]
+        elapsed = time.perf_counter()
         of = one_of(sources, r)[0]
+        elapsed = time.perf_counter() - elapsed
         if len(of) != numlist:
             errstr = "Unexpected length!"
             yield (False, errstr)
@@ -148,12 +159,14 @@ def test_one_of(times, numlist=100):
                     errstr = "'%s' is not in the list!" % y
                     success = False
                     break
-            yield (success, errstr)
+            yield (success, errstr, elapsed)
 
 def test_one_of_times(times, numlist=100):
     for _ in range(times):
         sources = generate_random_string_list(r, finalset)
+        elapsed = time.perf_counter()
         res = one_of_times(sources, (numlist, r))[0]
+        elapsed = time.perf_counter() - elapsed
         if len(res) != numlist:
             errstr = "Unexpected length!"
             yield (False, errstr)
@@ -165,7 +178,7 @@ def test_one_of_times(times, numlist=100):
                     errstr = "Error in one_of_times: '%s' is not in the list!" % x
                     success = False
                     break
-            yield (success, errstr)
+            yield (success, errstr, elapsed)
 
 def test_one_of_unique(times, numlist=100):
     init_child({}, nullcontext())
@@ -174,8 +187,10 @@ def test_one_of_unique(times, numlist=100):
         sources = [generate_random_string_list(r, finalset, numwords=numitems) for _ in range(numlist)]
         maxitems = max([len(set(l)) for l in sources])
         res = []
+        elapsed = time.perf_counter()
         for _ in range(maxitems):
             res.append(one_of_unique(sources, r)[0])
+        elapsed = time.perf_counter() - elapsed
         if len(res) != maxitems:
             errstr = "Unexpected length!"
             yield (False, errstr)
@@ -199,7 +214,7 @@ def test_one_of_unique(times, numlist=100):
                             break
                     if not success:
                         break
-            yield (success, errstr)
+            yield (success, errstr, elapsed)
 
 def test_one_of_unique_times(times, numlist=100):
     init_child({}, nullcontext())
@@ -207,17 +222,22 @@ def test_one_of_unique_times(times, numlist=100):
         sources = generate_random_string_list(r, finalset)
         unqitems = set(sources)
         callfor = len(unqitems)
-        ret = set(one_of_unique_times(sources, (callfor, r))[0])
+        elapsed = time.perf_counter()
+        res = one_of_unique_times(sources, (callfor, r))[0]
+        elapsed = time.perf_counter() - elapsed
+        ret = set(res)
         if len(unqitems - ret) > 0:
             errstr = "Not all unique items got picked up!"
             yield (False, errstr)
         else:
-            yield (True, '')
+            yield (True, '', elapsed)
 
 def test_upto(times, numlist=100):
     for _ in range(times):
         uptolist = [random.randint(100, 500) for _ in range(numlist)]
+        elapsed = time.perf_counter()
         res = upto(uptolist, r)[0]
+        elapsed = time.perf_counter() - elapsed
         if len(res) != numlist:
             errstr = "Unexpected length!"
             yield (False, errstr)
@@ -230,12 +250,14 @@ def test_upto(times, numlist=100):
                     errstr = '%d is not in range upto %d' % (x[0], x[1])
                     success = False
                     break
-            yield (success, errstr)
+            yield (success, errstr, elapsed)
 
 def test_upto_times(times, numlist=100):
     for _ in range(times):
         upt = [random.randint(100, 500)]
+        elapsed = time.perf_counter()
         res = upto_times(upt, (numlist, r))[0]
+        elapsed = time.perf_counter() - elapsed
         if len(res) != numlist:
             yield (False, "Unexpected length!")
         else:
@@ -246,13 +268,15 @@ def test_upto_times(times, numlist=100):
                     errstr = '%d is not in range upto %d' % (x, upt[0])
                     success = False
                     break
-            yield (success, errstr)
+            yield (success, errstr, elapsed)
 
 
 def test_lower(times, numlist=100):
     for _ in range(times):
         strlist = generate_random_string_list(r, finalset, numwords=numlist)
+        elapsed = time.perf_counter()
         res = lower(strlist, r)[0]
+        elapsed = time.perf_counter() - elapsed
         if len(res) != numlist:
             yield (False, "Unexpected length!")
         else:
@@ -264,12 +288,14 @@ def test_lower(times, numlist=100):
                     errstr = "Not lowered successfully!"
                     success = False
                     break
-            yield (success, errstr)
+            yield (success, errstr, elapsed)
 
 def test_lower_times(times, numlists=100):
     for _ in range(times):
         strlist = generate_random_string_list(r, finalset, numwords=1)[0]
+        elapsed = time.perf_counter()
         res = lower_times(strlist, (numlists, r))[0]
+        elapsed = time.perf_counter() - elapsed
         success = True
         errstr = ''
         result = strlist.lower()
@@ -285,7 +311,7 @@ def test_lower_times(times, numlists=100):
                 errstr = "Unexpected end of list!"
                 success = False
                 break
-        yield (success, errstr)
+        yield (success, errstr, elapsed)
 
 def test_all(total=100, numlists=100):
     tests = {"append": test_append, "append_times": test_append_times,
@@ -298,16 +324,16 @@ def test_all(total=100, numlists=100):
     l = max([len(s) for s in tests.keys()])
     donestr = "Done (of %d)" % total
     donestrlen = len(donestr)
-    topstring = "No.    {:^{width}}    ".format("Test", width=l) + donestr + "    Passed    Failed"
+    topstring = "No.    {:^{width}}    ".format("Test", width=l) + donestr + "    Passed    Failed    Avg Time"
     print(topstring)
     print(''.join(['-']*len(topstring)))
 
     count = 1
     for k in tests:
         print("{:^3d}    ".format(count) + bold("{:^{width}}").format(k, width=l) + "    ", end='')
-        stat = blue("{:^{width}}") + "    " + green("{:^6d}") + "    " + red("{:^6d}")
-        first = stat.format(0, 0, 0, width=donestrlen)
-        size = len(first) - (bcolors.COLORLENGTH * 3) # color sequences appear as separate characters,
+        stat = blue("{:^{width}}") + "    " + green("{:^6d}") + "    " + red("{:^6d}") + "    " + magenta("{:^2.6f}s")
+        first = stat.format(0, 0, 0, 0.0, width=donestrlen)
+        size = len(first) - (bcolors.COLORLENGTH * 4) # color sequences appear as separate characters,
                                     # but is interpreted as a no-length control sequence
         bk = ''.join(['\b']*size)
         print(first, end='')
@@ -316,14 +342,18 @@ def test_all(total=100, numlists=100):
         failed = 0
         i = 0
         messages = {}
+        avgtime = 0.0
+        totaltime = 0.0
         for res in tests[k](total, numlists):
             if res[0]:
                 passed += 1
+                totaltime += res[2]
+                avgtime = totaltime / passed
             else:
                 failed += 1
                 messages[i] = res[1]
             i += 1
-            print(bk + stat.format(i, passed, failed, width=donestrlen), end='')
+            print(bk + stat.format(i, passed, failed, avgtime, width=donestrlen), end='')
             sys.stdout.flush()
         count = count + 1
         if len(messages) > 0:
