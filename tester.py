@@ -311,6 +311,7 @@ def test_all(total=100, numlists=100):
                                     # but is interpreted as a no-length control sequence
         bk = ''.join(['\b']*size)
         print(first, end='')
+        sys.stdout.flush()
         passed = 0
         failed = 0
         i = 0
