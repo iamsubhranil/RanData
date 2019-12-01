@@ -16,7 +16,7 @@ class bcolors:
     import platform
 
     if platform.system() == 'Windows':
-        HEADER = ''
+        MAGENTA = ''
         OKBLUE = ''
         OKGREEN = ''
         WARNING = ''
@@ -326,7 +326,7 @@ def test_all(total=100, numlists=100):
     donestrlen = len(donestr)
     topstring = "No.    {:^{width}}    ".format("Test", width=l) + donestr + "    Passed    Failed    Avg Time"
     print(topstring)
-    print(''.join(['-']*len(topstring)))
+    print(''.join(['=']*len(topstring)))
 
     count = 1
     for k in tests:
