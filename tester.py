@@ -8,12 +8,13 @@ from string import ascii_letters, digits, punctuation, whitespace
 from itertools import repeat
 import sys
 import time
+import platform
+import json
 
 finalset = ascii_letters + digits + punctuation
 r = random
 
 class bcolors:
-    import platform
 
     if platform.system() == 'Windows':
         MAGENTA = ''
@@ -313,6 +314,22 @@ def test_lower_times(times, numlists=100):
                 break
         yield (success, errstr, elapsed)
 
+def load_previous_result():
+    fname = "randata." + platform.system() + "_bench"
+    res = {}
+    try:
+        with open(fname, "r") as prev_res:
+            res = json.load(prev_res)
+    except:
+        pass
+    return res
+
+def store_current_result(old, new, numlists):
+    old[str(numlists)] = new
+    fname = "randata." + platform.system() + "_bench"
+    with open(fname, "w") as new_res:
+        json.dump(old, new_res)
+
 def test_all(total=100, numlists=100):
     tests = {"append": test_append, "append_times": test_append_times,
              "between": test_between, "between_times": test_between_times,
@@ -320,7 +337,11 @@ def test_all(total=100, numlists=100):
              "one_of_unique": test_one_of_unique, "one_of_unique_times": test_one_of_unique_times,
              "upto": test_upto, "upto_times": test_upto_times,
              "lower": test_lower, "lower_times": test_lower_times}
-
+    comparison = load_previous_result()
+    oldres = {}
+    if str(numlists) in comparison:
+        oldres = comparison[str(numlists)]
+    newres = {}
     l = max([len(s) for s in tests.keys()])
     donestr = "Done (of %d)" % total
     donestrlen = len(donestr)
@@ -330,9 +351,14 @@ def test_all(total=100, numlists=100):
 
     count = 1
     for k in tests:
+        oldavg = 0.0
+        if k in oldres:
+            oldavg = oldres[k]
         print("{:^3d}    ".format(count) + bold("{:^{width}}").format(k, width=l) + "    ", end='')
         stat = blue("{:^{width}}") + "    " + green("{:^6d}") + "    " + red("{:^6d}") + "    " + magenta("{:^2.6f}s")
-        first = stat.format(0, 0, 0, 0.0, width=donestrlen)
+        if oldavg > 0.0:
+            stat += "({:^7.2f}%)"
+        first = stat.format(0, 0, 0, 0.0, 99.99, width=donestrlen)
         size = len(first) - (bcolors.COLORLENGTH * 4) # color sequences appear as separate characters,
                                     # but is interpreted as a no-length control sequence
         bk = ''.join(['\b']*size)
@@ -344,19 +370,26 @@ def test_all(total=100, numlists=100):
         messages = {}
         avgtime = 0.0
         totaltime = 0.0
+        percen = 0.0
         for res in tests[k](total, numlists):
             if res[0]:
                 passed += 1
                 totaltime += res[2]
                 avgtime = totaltime / passed
+                newres[k] = avgtime
+                if oldavg > 0.0:
+                    percen = ((oldavg - avgtime)*100/oldavg)
             else:
                 failed += 1
                 messages[i] = res[1]
             i += 1
-            print(bk + stat.format(i, passed, failed, avgtime, width=donestrlen), end='')
+            print(bk + stat.format(i, passed, failed, avgtime, percen, width=donestrlen), end='')
             sys.stdout.flush()
         count = count + 1
         if len(messages) > 0:
             for k in messages:
                 print("\n" + red("[Fail]") + " #%d : %s" % (k+1, messages[k]), end='')
         print("")
+
+    if len(oldres) == 0:
+        store_current_result(comparison, newres, numlists)
