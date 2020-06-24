@@ -45,3 +45,19 @@ are listed below.
                         at subsequent calls from the arguments
 4. number_between(x, y) : returns a number between (x, y)
 5. number_upto(x) : returns a number between [0, x]
+6. lower(x) : converts the argument into lowercase
+
+## Available default rules
+
+1. first_name
+2. last_name
+3. full_name
+4. address
+5. area
+6. gender
+7. domain   // email domains
+8. email
+9. year     // between 1990-2020
+10. day     // between 1-28
+11. month   // between 1-12
+12. date    // in YYYY-MM-DD
