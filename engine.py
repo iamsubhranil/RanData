@@ -36,7 +36,7 @@ def one_of_unique(k, r, rules):
     global UNIQUE_DICTIONARY_LOCK
 
     res = []
-    for expand in zip(k,rules):
+    for expand in zip(k, rules):
         l = expand[0]
         rule = expand[1]
         with UNIQUE_DICTIONARY_LOCK:
@@ -230,10 +230,10 @@ class Engine(AstVisitor):
         res = []
         if arg_is_constant:
             func = self.vector_function_dictionary[ast.func.val]
-            return func(next(argsorted), times)
+            return func(next(argsorted), times, times[-1])
         else:
             # send the Random object
-            res.extend(func(argsorted, times[1])[0])
+            res.extend(func(argsorted, times[1], times[-1])[0])
             # Finally, wrap the result on a tuple
             # and mark it as not constant
             return (res, False)
