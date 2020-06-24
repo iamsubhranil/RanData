@@ -246,3 +246,8 @@ full_name = append(first_name, " ", last_name)
 domain = one_of("gmail", "yahoo", "hotmail", "outlook")
 gender = one_of("Male", "Female", "Other")
 email = append(lower(first_name), "_", lower(last_name), "@", domain, ".com")
+
+year = number_between(1990, 2020)
+day = number_between(1, 28)
+month = number_between(1, 12)
+date = append("'", year, "-", month, "-", day, "'")
