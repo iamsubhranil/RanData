@@ -183,14 +183,15 @@ def test_one_of_times(times, numlist=100):
 
 def test_one_of_unique(times, numlist=100):
     init_child({}, nullcontext())
-    for _ in range(times):
+    for j in range(times):
         numitems = 100
+        namelist = ["dict_test_one_of_unqiue_%d_%d" % (j,i) for i in range(numlist)]
         sources = [generate_random_string_list(r, finalset, numwords=numitems) for _ in range(numlist)]
         maxitems = max([len(set(l)) for l in sources])
         res = []
         elapsed = time.perf_counter()
         for _ in range(maxitems):
-            res.append(one_of_unique(sources, r)[0])
+            res.append(one_of_unique(sources, r, namelist)[0])
         elapsed = time.perf_counter() - elapsed
         if len(res) != maxitems:
             errstr = "Unexpected length!"
@@ -219,12 +220,12 @@ def test_one_of_unique(times, numlist=100):
 
 def test_one_of_unique_times(times, numlist=100):
     init_child({}, nullcontext())
-    for _ in range(times):
+    for j in range(times):
         sources = generate_random_string_list(r, finalset)
         unqitems = set(sources)
         callfor = len(unqitems)
         elapsed = time.perf_counter()
-        res = one_of_unique_times(sources, (callfor, r))[0]
+        res = one_of_unique_times(sources, (callfor, r), "dict_test_one_of_unqiue_times%d" % j)[0]
         elapsed = time.perf_counter() - elapsed
         ret = set(res)
         if len(unqitems - ret) > 0:

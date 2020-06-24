@@ -1,48 +1,49 @@
-from my_parser import AstVisitor, FunctionCallExpression, PrintStatement
+from my_parser import AstVisitor, FunctionCallExpression, PrintStatement, VariableExpression
 from scanner import Token
 import random
 from itertools import repeat, chain
 from contextlib import nullcontext
 
 
-def append(y, r):
+def append(y, r, rule=None):
     return ([''.join([str(z) for z in x]) for x in y], False)
 
 
-def append_times(x, y):
+def append_times(x, y, rule=None):
     # unpack the raw value, and mark the
     # returning one as constant
     return (repeat(append(x, y[1])[0][0], y[0]), True)
 
 
-def one_of(l, r):
+def one_of(l, r, rule=None):
     return ([r.choice(k) for k in l], False)
 
 
-def one_of_times(l, y):
+def one_of_times(l, y, rule=None):
     return (y[1].choices(l, k=y[0]), False)
 
 
-def lower(w, r):
+def lower(w, r, rule=None):
     return ([str(x).lower() for x in w], False)
 
 
-def lower_times(x, y):
+def lower_times(x, y, rule=None):
     return (repeat(str(x).lower(), y[0]), True)
 
 
-def one_of_unique(k, r):
+def one_of_unique(k, r, rules):
     global UNIQUE_DICTIONARY
     global UNIQUE_DICTIONARY_LOCK
 
     res = []
-    for l in k:
-        tup = frozenset(l)
+    for expand in zip(k,rules):
+        l = expand[0]
+        rule = expand[1]
         with UNIQUE_DICTIONARY_LOCK:
-            if tup not in UNIQUE_DICTIONARY:
-                UNIQUE_DICTIONARY[tup] = set(l)
+            if rule not in UNIQUE_DICTIONARY:
+                UNIQUE_DICTIONARY[rule] = set(l)
 
-            dictionary = UNIQUE_DICTIONARY[tup]
+            dictionary = UNIQUE_DICTIONARY[rule]
             if len(dictionary) == 0:
                 raise EngineError("No more unique values to generate!")
 
@@ -50,31 +51,30 @@ def one_of_unique(k, r):
             v = r.sample(dictionary, 1)
             dictionary.remove(v[0])
             res.append(v[0])
-            UNIQUE_DICTIONARY[tup] = dictionary
+            UNIQUE_DICTIONARY[rule] = dictionary
     return (res, False)
 
 
-def one_of_unique_times(l, number):
+def one_of_unique_times(l, number, rule):
     global UNIQUE_DICTIONARY
     global UNIQUE_DICTIONARY_LOCK
 
-    tup = frozenset(l)
     with UNIQUE_DICTIONARY_LOCK:
-        if tup not in UNIQUE_DICTIONARY:
-            UNIQUE_DICTIONARY[tup] = set(l)
+        if rule not in UNIQUE_DICTIONARY:
+            UNIQUE_DICTIONARY[rule] = set(l)
 
-        dictionary = UNIQUE_DICTIONARY[tup]
+        dictionary = UNIQUE_DICTIONARY[rule]
         if len(dictionary) < number[0]:
             raise EngineError(
                 "Required %d unique values cannot be generated!" % number[0])
         v = number[1].sample(dictionary, number[0])
         dictionary.difference_update(v)
 
-        UNIQUE_DICTIONARY[tup] = dictionary
+        UNIQUE_DICTIONARY[rule] = dictionary
     return (v, False)
 
 
-def between_times(x, y):
+def between_times(x, y, rule=None):
     if len(x) != 2:
         raise EngineError(
             "number.between takes two arguments, %d were given" % len(x))
@@ -83,11 +83,11 @@ def between_times(x, y):
     return (y[1].choices(range(lower, upper + 1), k=y[0]), False)
 
 
-def between(y, r):
+def between(y, r, rule=None):
     return ([(x[0] + int((x[1] - x[0])*r.random())) for x in y], False)
 
 
-def upto_times(x, y):
+def upto_times(x, y, rule=None):
     if len(x) != 1:
         raise EngineError(
             "upto takes one argument, %d were given" % len(x))
@@ -95,7 +95,7 @@ def upto_times(x, y):
     return (y[1].choices(range(0, upper + 1), k=y[0]), False)
 
 
-def upto(y, r):
+def upto(y, r, rule=None):
     return ([int(r.random() * (x + 1)) for x in y], False)
 
 
@@ -117,43 +117,12 @@ class NullManager:
         return nullcontext()
 
 
-class AstFlatter(AstVisitor):
-
-    def __init__(self, grammars={}):
-        AstVisitor.__init__(self)
-        self.grammars = grammars
-
-    def visit_assignment(self, ast):
-        self.grammars[ast.lhs.val] = self.visit(ast.rhs)
-        return self.grammars[ast.lhs.val]
-
-    def visit_literal(self, ast):
-        return ast
-
-    def visit_variable(self, ast):
-        if ast.val.val in self.grammars:
-            return self.grammars[ast.val.val]
-        return ast
-
-    def visit_function_call(self, ast):
-        func = ast.func
-        args = []
-        for a in ast.args:
-            args.append(self.visit(a))
-        return FunctionCallExpression(func, args)
-
-    def visit_print(self, ast):
-        val = self.visit(ast.val)
-        return PrintStatement(ast.times, val)
-
-
 class Engine(AstVisitor):
 
     def __init__(self, generate_only=False, processes=-1):
-        AstVisitor.__init__(self)
+        AstVisitor.__init__(self, debug=False)
         self.defaultrules = {}
         self.grammars = {}
-        self.flatter = AstFlatter()
         self.num_process = processes
         self.generate_only = generate_only
         self.function_dictionary = {"one_of": one_of, "one_of_unique": one_of_unique,
@@ -165,7 +134,12 @@ class Engine(AstVisitor):
                                            "number_between": between_times}
 
     def visit_assignment(self, ast):
-        self.grammars[ast.lhs.val] = self.flatter.visit(ast)
+        if isinstance(ast.rhs, VariableExpression):
+            if not ast.rhs.val.val in self.grammars:
+                raise EngineError("Rule not found '%s'!" % ast.rhs.val)
+            self.grammars[ast.lhs.val] = self.grammars[ast.rhs.val.val]
+        else:
+            self.grammars[ast.lhs.val] = ast.rhs
         return None
         # return ast.rhs.accept(self)
         # assignment no longer explicitly evaluates
@@ -199,7 +173,6 @@ class Engine(AstVisitor):
             return result
 
     def visit_print(self, ast):
-        ast = self.flatter.visit_print(ast)
         times = int(ast.times.val)
         if (times > 10000 or self.num_process != -1) and self.num_process != 1:
             try:
@@ -228,7 +201,7 @@ class Engine(AstVisitor):
         if ast.val.val in self.defaultrules:
             return (repeat(self.defaultrules[ast.val.val], times[0]), True)
         elif ast.val.val in self.grammars:
-            return self.visit_optional(self.grammars[ast.val.val], times)
+            return self.visit_optional(self.grammars[ast.val.val], (*times, ast.val.val))
         else:
             raise EngineError("No such rule found '%s'!" % ast.val.val)
 
@@ -246,17 +219,18 @@ class Engine(AstVisitor):
             arg_is_constant = arg_is_constant and temp[1]
             # extract the raw collection and store it as argument
             args.append(temp[0])
-
         if arg_is_constant:
             argsorted = repeat([next(y) for y in args], times[0])
         else:
-            argsorted = zip(*args)
+            argsorted = args[0]
+            # only zip together if there is something to zip with
+            if len(args) > 1:
+                argsorted = zip(*args)
 
         res = []
         if arg_is_constant:
             func = self.vector_function_dictionary[ast.func.val]
-            res = func(next(argsorted), times)
-            return res
+            return func(next(argsorted), times)
         else:
             # send the Random object
             res.extend(func(argsorted, times[1])[0])
