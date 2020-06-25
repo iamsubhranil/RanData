@@ -4,7 +4,6 @@ import random
 from itertools import repeat, chain
 from contextlib import nullcontext
 
-
 def append(y, r, rule=None):
     return ([''.join([str(z) for z in x]) for x in y], False)
 
@@ -24,11 +23,11 @@ def one_of_times(l, y, rule=None):
 
 
 def lower(w, r, rule=None):
-    return ([str(x).lower() for x in w], False)
+    return ([str(x[0]).lower() for x in w], False)
 
 
 def lower_times(x, y, rule=None):
-    return (repeat(str(x).lower(), y[0]), True)
+    return (repeat(str(x[0]).lower(), y[0]), True)
 
 
 def one_of_unique(k, r, rules):
@@ -75,9 +74,6 @@ def one_of_unique_times(l, number, rule):
 
 
 def between_times(x, y, rule=None):
-    if len(x) != 2:
-        raise EngineError(
-            "between takes two arguments, %d were given" % len(x))
     lower = int(x[0])
     upper = int(x[1])
     return (y[1].choices(range(lower, upper + 1), k=y[0]), False)
@@ -88,9 +84,6 @@ def between(y, r, rule=None):
 
 
 def upto_times(x, y, rule=None):
-    if len(x) != 1:
-        raise EngineError(
-            "upto takes one argument, %d were given" % len(x))
     upper = int(x[0])
     return (y[1].choices(range(0, upper + 1), k=y[0]), False)
 
@@ -132,6 +125,9 @@ class Engine(AstVisitor):
                                            "append": append_times, "lower": lower_times,
                                            "number_upto": upto_times,
                                            "number_between": between_times}
+        self.argcount = {"one_of": -1, "one_of_unique": -1,
+                         "append": -1, "lower": 1,
+                         "number_upto": 1, "number_between": 2}
 
     def visit_assignment(self, ast):
         if isinstance(ast.rhs, VariableExpression):
@@ -209,6 +205,10 @@ class Engine(AstVisitor):
         if ast.func.val not in self.function_dictionary:
             raise EngineError("Invalid function name '%s'!" % (ast.func))
         func = self.function_dictionary[ast.func.val]
+        argc = self.argcount[ast.func.val]
+        if argc != -1 and len(ast.args) != argc:
+            raise EngineError("Function '%s' takes %d arguments, %d given!"
+                              % (ast.func.val, argc, len(ast.args)))
 
         args = []
         arg_is_constant = True
@@ -222,10 +222,7 @@ class Engine(AstVisitor):
         if arg_is_constant:
             argsorted = repeat([next(y) for y in args], times[0])
         else:
-            argsorted = args[0]
-            # only zip together if there is something to zip with
-            if len(args) > 1:
-                argsorted = zip(*args)
+            argsorted = zip(*args)
 
         res = []
         if arg_is_constant:

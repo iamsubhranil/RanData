@@ -275,7 +275,7 @@ def test_upto_times(times, numlist=100):
 
 def test_lower(times, numlist=100):
     for _ in range(times):
-        strlist = generate_random_string_list(r, finalset, numwords=numlist)
+        strlist = zip(generate_random_string_list(r, finalset, numwords=numlist))
         elapsed = time.perf_counter()
         res = lower(strlist, r)[0]
         elapsed = time.perf_counter() - elapsed
@@ -296,7 +296,7 @@ def test_lower_times(times, numlists=100):
     for _ in range(times):
         strlist = generate_random_string_list(r, finalset, numwords=1)[0]
         elapsed = time.perf_counter()
-        res = lower_times(strlist, (numlists, r))[0]
+        res = lower_times([strlist], (numlists, r))[0]
         elapsed = time.perf_counter() - elapsed
         success = True
         errstr = ''
