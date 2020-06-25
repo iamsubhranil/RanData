@@ -128,6 +128,7 @@ class Engine(AstVisitor):
         self.argcount = {"one_of": -1, "one_of_unique": -1,
                          "append": -1, "lower": 1,
                          "number_upto": 1, "number_between": 2}
+        self.results = {}
 
     def visit_assignment(self, ast):
         if isinstance(ast.rhs, VariableExpression):
@@ -194,12 +195,17 @@ class Engine(AstVisitor):
             return (repeat(str(ast.val.val.replace("\"", "")), times), True)
 
     def visit_variable(self, ast, times):
-        if ast.val.val in self.defaultrules:
-            return (repeat(self.defaultrules[ast.val.val], times[0]), True)
-        elif ast.val.val in self.grammars:
-            return self.visit_optional(self.grammars[ast.val.val], (*times, ast.val.val))
+        name = ast.val.val
+        if name in self.results:
+            return self.results[name]
+        elif name in self.grammars:
+            res = self.visit_optional(self.grammars[name], (*times, name))
+            self.results[name] = res
+            return res
+        elif name in self.defaultrules:
+            return (repeat(self.defaultrules[name], times[0]), True)
         else:
-            raise EngineError("No such rule found '%s'!" % ast.val.val)
+            raise EngineError("No such rule found '%s'!" % name)
 
     def visit_function_call(self, ast, times):
         if ast.func.val not in self.function_dictionary:
