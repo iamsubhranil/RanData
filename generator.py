@@ -1,6 +1,6 @@
-from scanner import Scanner
-from my_parser import Parser, ParseError, PrettyPrinter
-from engine import Engine
+from scanner import Scanner, ScanError
+from my_parser import Parser, ParseError, PrettyPrinter, VisitorError
+from engine import Engine, EngineError
 import sys
 import argparse
 import time
@@ -19,8 +19,33 @@ def check_positive_generator(string):
                 "%s should be integer!" % string)
     return check_positive
 
+def try_run(source, engine, store_res=False):
+    scanner = Scanner(source)
+    res = []
+    try:
+        parser = Parser(scanner)
+        ast = parser.parse_all()
+        for a in ast:
+            r = a.accept(engine)
+            if r != None and store_res:
+                res.extend(r)
+        return (res, True)
+    except ParseError as pe:
+        print("[Error] Error occurred while parsing!")
+        print(pe)
+    except ScanError as se:
+        print("[Error] Error occurred while scanning!")
+        print(se)
+    except EngineError as ee:
+        print("[Error] Error occurred while evaluating!")
+        print(ee)
+    except VisitorError as ve:
+        print("[Error] Error in implementation!")
+        print(ve)
+    return (None, False)
 
-if __name__ == "__main__":
+
+def main():
 
     parser = argparse.ArgumentParser()
     testgroup = parser.add_mutually_exclusive_group(required=True)
@@ -49,38 +74,38 @@ if __name__ == "__main__":
         tester.test_all(given.check[0], given.check[1])
         sys.exit(0)
 
+    e = Engine(given.generate, given.process[0])
+    bootstrap_loaded = False
     with open("bootstrap.format", "r") as f:
         source = f.read()
+        res, bootstrap_loaded = try_run(source, e, False)
+
+    if bootstrap_loaded == False:
+        print("[Warn] Loading bootstrap module failed!")
+        print("[Warn] One or more default rules may not be available!")
+
+    with open(given.input_file, "r") as g:
+        source = g.read()
         scanner = Scanner(source)
         parser = Parser(scanner)
-        ast = parser.parse_all()
-        p = PrettyPrinter()
-        e = Engine(given.generate, given.process[0])
-        for a in ast:
-            a.accept(e)
+        if given.time:
+            start = time.perf_counter()
+        res, success = try_run(source, e, given.generate == False)
+        if success == False:
+            print("[Error] Generation failed!")
+            return
+        if given.time:
+            print("Time elapsed: %0.5f" %
+                    (time.perf_counter() - start) + "s")
 
-        res = []
-
-        with open(given.input_file, "r") as g:
-            source = g.read()
-            scanner = Scanner(source)
-            parser = Parser(scanner)
-            if given.time:
-                start = time.perf_counter()
-            for a in parser.parse_all():
-                r = a.accept(e)
-                if r != None and given.generate == False:
-                    for s in r:
-                        res.append(s)
-            if given.time:
-                print("Time elapsed: %0.5f" %
-                      (time.perf_counter() - start) + "s")
-
-            if given.generate == False:
-                if given.output_file != None:
-                    with open(given.output_file, "w") as h:
-                        for line in res:
-                            h.write(str(line) + "\n")
-                else:
+        if given.generate == False:
+            if given.output_file != None:
+                with open(given.output_file, "w") as h:
                     for line in res:
-                        print(line)
+                        h.write(str(line) + "\n")
+            else:
+                for line in res:
+                    print(line)
+
+if __name__ == "__main__":
+    main()

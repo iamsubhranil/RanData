@@ -77,7 +77,7 @@ def one_of_unique_times(l, number, rule):
 def between_times(x, y, rule=None):
     if len(x) != 2:
         raise EngineError(
-            "number.between takes two arguments, %d were given" % len(x))
+            "between takes two arguments, %d were given" % len(x))
     lower = int(x[0])
     upper = int(x[1])
     return (y[1].choices(range(lower, upper + 1), k=y[0]), False)
@@ -180,7 +180,7 @@ class Engine(AstVisitor):
             except ImportError:
                 if self.num_process != -1:
                     print("[Info] Python in this system does not support multiprocessing!\n"
-                          "Falling back to single process!")
+                          "[Info] Falling back to single process!")
                 pass
         # either times < 10000 or import failed
         init_child({}, nullcontext())
