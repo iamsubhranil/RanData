@@ -132,15 +132,34 @@ Result Engine::identifierExecute(Value iden, int times) {
 //              same vertically
 // times: number of iterations
 
+String *appendOneRow(Result *args, int count, int row) {
+	String *strings[count];
+	// calculate the total size
+	int totalSize = 0;
+	for(int i = 0; i < count; i++) {
+		strings[i] = String::toString(Engine::getAt(args[i].val, row));
+		totalSize += strings[i]->size;
+	}
+	// allocate the whole string at once
+	String *res =
+	    (String *)malloc(sizeof(String) + (sizeof(char) * (totalSize + 1)));
+	res->size  = totalSize;
+	int oldidx = 0;
+	// copy the rest
+	for(int i = 0; i < count; i++) {
+		memcpy(&(res->values()[oldidx]), strings[i]->values(),
+		       strings[i]->size);
+		oldidx += strings[i]->size;
+	}
+	res->values()[totalSize] = 0;
+	return res;
+}
+
 Result Engine::appendExecute(Result *args, int count, bool isConstant,
                              int times) {
 	if(isConstant) {
-		// all arguments are repeat
-		String *res = String::toString(args[0].val, true);
-		for(int i = 1; i < count; i++) {
-			res = String::appendInPlace(res, args[i].val);
-		}
-		return Result::fromConstant(Repeat::from(Value(res), times));
+		return Result::fromConstant(
+		    Repeat::from(Value(appendOneRow(args, count, 0)), times));
 	} else {
 		// all arguments are either array, or repeat,
 		// or string, or number
@@ -149,11 +168,7 @@ Result Engine::appendExecute(Result *args, int count, bool isConstant,
 		// append of each row collection of arguments
 		Array *res = Array::create(times);
 		for(int i = 0; i < times; i++) {
-			String *row = String::toString(getAt(args[0].val, i), true);
-			for(int j = 1; j < count; j++) {
-				row = String::appendInPlace(row, getAt(args[j].val, i));
-			}
-			res->at(i) = Value(row);
+			res->at(i) = Value(appendOneRow(args, count, i));
 		}
 		return Result::from(Value(res));
 	}

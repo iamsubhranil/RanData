@@ -41,7 +41,7 @@ struct Engine {
 	Value print(Token times, Value what);
 
 	// returns ith value from the collection
-	Value getAt(Value v, int idx);
+	static Value getAt(Value v, int idx);
 
 	// expression parsers
 	Value                 identifierExpression(Token ex);

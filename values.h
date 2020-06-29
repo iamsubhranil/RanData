@@ -192,12 +192,6 @@ struct String {
 
 	inline char *values() const { return (char *)(this + 1); }
 
-	String *append(Value with) { return append(toString(with, false)); }
-
-	static String *appendInPlace(String *from, Value with) {
-		return appendInPlace(from, toString(with, false));
-	}
-
 	String *copy() {
 		String *s = (String *)malloc(sizeof(String) + size + 1);
 		memcpy(s, this, sizeof(String) + size + 1);
@@ -207,34 +201,6 @@ struct String {
 	String *lower() {
 		for(int i = 0; i < size; i++) values()[i] = tolower(values()[i]);
 		return this;
-	}
-
-	String *append(String *with) {
-		int     totalSize = size + with->size;
-		String *s =
-		    (String *)malloc(sizeof(String) + (sizeof(char) * (totalSize + 1)));
-		memcpy(s->values(), values(), size);
-		memcpy(&(s->values()[size]), with->values(), with->size);
-		s->values()[totalSize] = 0;
-		s->size                = totalSize;
-		// we don't hash the resulting string
-		// s->hash_ = hashString(s->values(), totalSize);
-		return s;
-	}
-
-	// 'from' must be heap allocated, the pointer may change.
-	// so the variable it belongs to must be reassigned
-	// after this call.
-	static String *appendInPlace(String *from, String *with) {
-		int     size = from->size;
-		String *m    = (String *)realloc(
-            from, sizeof(String) + (sizeof(char) * (size + with->size + 1)));
-		memcpy(&(m->values()[size]), with->values(), with->size);
-		m->values()[size + with->size] = 0;
-		m->size += with->size;
-		// we don't hash the resulting string
-		// m->hash_ = hashString(m->values(), m->size);
-		return m;
 	}
 };
 

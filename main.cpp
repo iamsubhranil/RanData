@@ -34,8 +34,9 @@ int main(int argc, char *argv[]) {
 	}
 	Engine e;
 	e.execute("bootstrap.format");
-	// e.execute();
 	clock_t start = clock();
-	e.execute(argv[1]);
+	Value   v     = e.execute(argv[1]);
 	printf("\nElapsed: %0.6fs\n", (double)(clock() - start) / CLOCKS_PER_SEC);
+	(void)v;
+	// printValue(v);
 }
