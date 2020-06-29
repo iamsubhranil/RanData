@@ -35,8 +35,14 @@ int main(int argc, char *argv[]) {
 	Engine e;
 	e.execute("bootstrap.format");
 	clock_t start = clock();
-	Value   v     = e.execute(argv[1]);
-	printf("\nElapsed: %0.6fs\n", (double)(clock() - start) / CLOCKS_PER_SEC);
-	(void)v;
+	try {
+		Value v = e.execute(argv[1]);
+		printf("\nElapsed: %0.6fs\n",
+		       (double)(clock() - start) / CLOCKS_PER_SEC);
+		(void)v;
+	} catch(EngineException e) {
+		const char *m = e.what();
+		cout << "[Error] " << m << "\n";
+	}
 	// printValue(v);
 }

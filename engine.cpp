@@ -38,24 +38,24 @@ Token Engine::consume(TokenType t, const char *message) {
 
 // parser
 
-Value Engine::identifierExpression(Token iden) {
-	return Value::identifier(String::from(iden, true));
+Expression Engine::identifierExpression(Token iden) {
+	return Expression(iden, Value::identifier(String::from(iden, true)));
 }
 
-Value Engine::stringExpression(Token str) {
-	return Value(String::from(str.start + 1, str.length - 2));
+Expression Engine::stringExpression(Token str) {
+	return Expression(str, Value(String::from(str.start + 1, str.length - 2)));
 }
 
-Value Engine::numberExpression(Token num) {
+Expression Engine::numberExpression(Token num) {
 	char *end;
 	long  n = strtol(num.start, &end, 10);
 	if(end != num.start + num.length) {
 		throw EngineException(num, "Invalid numeric value!");
 	}
-	return Value(n);
+	return Expression(num, Value(n));
 }
 
-Value Engine::parseExpression(Token t) {
+Expression Engine::parseExpression(Token t) {
 	ExpressionRule er = expressionRules[t.type];
 	if(er == NULL) {
 		throw EngineException(t, "Expected argument!");
@@ -63,11 +63,11 @@ Value Engine::parseExpression(Token t) {
 	return CALL_FUNCTION(er)(t);
 }
 
-Value Engine::parseExpression() {
+Expression Engine::parseExpression() {
 	return parseExpression(scanner.scanNextToken());
 }
 
-Value Engine::functionExpression(Token a) {
+Expression Engine::functionExpression(Token a) {
 	if(a.type == TOKEN_print) {
 		throw EngineException(a, "print() cannot be assigned to a rule!");
 	}
@@ -75,50 +75,54 @@ Value Engine::functionExpression(Token a) {
 	FunctionCall f    = FunctionCall::from(a.type);
 	int          args = argumentCounts[a.type - TOKEN_append];
 	// there should be at least one argument
-	Value fa = parseExpression();
+	Expression fa = parseExpression();
 	if(args != -1) {
-		f.args        = Array::create(args);
-		f.args->at(0) = fa;
-		int i         = 1;
+		f.args    = (Expression *)malloc(sizeof(Expression) * args);
+		f.args[0] = fa;
+		int i     = 1;
 		while(--args) {
 			consume(TOKEN_COMMA, "Expected ',' after argument!");
-			f.args->at(i++) = parseExpression();
+			f.args[i++] = parseExpression();
 		}
+		f.count = i;
 		consume(TOKEN_RIGHT_PAREN, "Expected ')' after function call!");
 	} else {
-		f.args        = Array::create(1);
-		f.args->at(0) = fa;
-		int   i       = 1;
+		f.args    = (Expression *)malloc(sizeof(Expression));
+		f.args[0] = fa;
+		int   i   = 1;
 		Token arg;
 		while((arg = scanner.scanNextToken()).type != TOKEN_RIGHT_PAREN) {
 			if(arg.type != TOKEN_COMMA) {
 				throw EngineException(arg, "Expected ',' after argument!");
 			}
-			f.args          = Array::resize(f.args, i + 1);
-			f.args->at(i++) = parseExpression();
+			f.args =
+			    (Expression *)realloc(f.args, sizeof(Expression) * (i + 1));
+			f.args[i++] = parseExpression();
 		}
+		f.count = i;
 	}
-	return Value(f);
+	return Expression(a, f);
 }
 
 // execution
 
-Result Engine::numberExecute(Value num, int times) {
-	return Result(Value(Repeat::from(num, times)), true);
+Result Engine::numberExecute(Expression num, int times) {
+	return Result(Value(Repeat::from(num.as.literal, times)), true);
 }
 
-Result Engine::stringExecute(Value num, int times) {
-	return Result(Value(Repeat::from(num, times)), true);
+Result Engine::stringExecute(Expression str, int times) {
+	return Result(Value(Repeat::from(str.as.literal, times)), true);
 }
 
-Result Engine::identifierExecute(Value iden, int times) {
+Result Engine::identifierExecute(Expression id, int times) {
+	Value iden = id.as.literal;
 	if(results.contains(iden.as.str)) {
 		return results[iden.as.str];
 	} else if(!rules.contains(iden.as.str)) {
 		throw EngineException("No such rule found!");
 	}
-	Value  repr = rules[iden.as.str];
-	Result res  = evaluateValue(repr, times);
+	Expression repr = rules[iden.as.str];
+	Result     res  = evaluateExpression(repr, times);
 	// cache the result
 	results[iden.as.str] = res;
 	return res;
@@ -155,8 +159,9 @@ String *appendOneRow(Result *args, int count, int row) {
 	return res;
 }
 
-Result Engine::appendExecute(Result *args, int count, bool isConstant,
+Result Engine::appendExecute(Token t, Result *args, int count, bool isConstant,
                              int times) {
+	(void)t;
 	if(isConstant) {
 		return Result(Repeat::from(Value(appendOneRow(args, count, 0)), times));
 	} else {
@@ -173,9 +178,10 @@ Result Engine::appendExecute(Result *args, int count, bool isConstant,
 	}
 }
 
-Result Engine::lowerExecute(Result *args, int count, bool isConstant,
+Result Engine::lowerExecute(Token t, Result *args, int count, bool isConstant,
                             int times) {
 	(void)count;
+	(void)t;
 	if(isConstant) {
 		return Result(Repeat::from(
 		    String::toString(getAt(args[0].val, 0), true)->lower(), times));
@@ -189,14 +195,14 @@ Result Engine::lowerExecute(Result *args, int count, bool isConstant,
 	}
 }
 
-Result Engine::number_betweenExecute(Result *args, int count, bool isConstant,
-                                     int times) {
+Result Engine::number_betweenExecute(Token t, Result *args, int count,
+                                     bool isConstant, int times) {
 	(void)count;
 	if(isConstant) {
 		if(!validateType(args[0].val, Value::Number) ||
 		   !validateType(args[1].val, Value::Number)) {
-			throw EngineException(
-			    "Both arguments of 'number_between' must be valid numbers!");
+			throw EngineException(t, "Both arguments of 'number_between' "
+			                         "must be valid numbers!");
 		}
 		Array *res = Array::create(times);
 		random.setIntGenerateRange(args[0].val.as.number,
@@ -213,8 +219,8 @@ Result Engine::number_betweenExecute(Result *args, int count, bool isConstant,
 			if(!validateType(v1, Value::Number) ||
 			   !validateType(v2, Value::Number)) {
 				throw EngineException(
-				    "Both arguments of 'number_between' must be valid "
-				    "numbers!");
+				    t, "Both arguments of 'number_between' must be valid "
+				       "numbers!");
 			}
 			random.setIntGenerateRange(v1.as.number, v2.as.number);
 			res->at(i) = Value(random.nextIntInRange());
@@ -223,13 +229,13 @@ Result Engine::number_betweenExecute(Result *args, int count, bool isConstant,
 	}
 }
 
-Result Engine::number_uptoExecute(Result *args, int count, bool isConstant,
-                                  int times) {
+Result Engine::number_uptoExecute(Token t, Result *args, int count,
+                                  bool isConstant, int times) {
 	(void)count;
 	if(isConstant) {
 		if(!validateType(args[0].val, Value::Number)) {
 			throw EngineException(
-			    "Argument of 'number_upto' must be a valid number!");
+			    t, "Argument of 'number_upto' must be a valid number!");
 		}
 		Array *res = Array::create(times);
 		random.setIntGenerateRange(0, getAt(args[0].val, 0).as.number);
@@ -243,8 +249,8 @@ Result Engine::number_uptoExecute(Result *args, int count, bool isConstant,
 			Value v1 = getAt(args[0].val, i);
 			if(!validateType(v1, Value::Number)) {
 				throw EngineException(
-				    "Argument of 'number_upto' must be a valid "
-				    "number!");
+				    t, "Argument of 'number_upto' must be a valid "
+				       "number!");
 			}
 			random.setIntGenerateRange(0, v1.as.number);
 			res->at(i) = Value(random.nextIntInRange());
@@ -253,8 +259,9 @@ Result Engine::number_uptoExecute(Result *args, int count, bool isConstant,
 	}
 }
 
-Result Engine::one_ofExecute(Result *args, int count, bool isConstant,
+Result Engine::one_ofExecute(Token t, Result *args, int count, bool isConstant,
                              int times) {
+	(void)t;
 	if(isConstant) {
 		Array *res = Array::create(times);
 		random.setIntGenerateRange(0, count - 1);
@@ -273,8 +280,9 @@ Result Engine::one_ofExecute(Result *args, int count, bool isConstant,
 	return Result(Value());
 }
 
-Result Engine::one_of_uniqueExecute(Result *args, int count, bool isConstant,
-                                    int times) {
+Result Engine::one_of_uniqueExecute(Token t, Result *args, int count,
+                                    bool isConstant, int times) {
+	(void)t;
 	(void)args;
 	(void)count;
 	(void)isConstant;
@@ -282,8 +290,9 @@ Result Engine::one_of_uniqueExecute(Result *args, int count, bool isConstant,
 	return Result(Value());
 }
 
-Result Engine::printExecute(Result *args, int count, bool isConstant,
+Result Engine::printExecute(Token t, Result *args, int count, bool isConstant,
                             int times) {
+	(void)t;
 	(void)args;
 	(void)count;
 	(void)isConstant;
@@ -291,31 +300,40 @@ Result Engine::printExecute(Result *args, int count, bool isConstant,
 	return Result(Value());
 }
 
-Result Engine::functionExecute(TokenType name, Array *args, int times) {
-	Result *results    = (Result *)malloc(sizeof(Result) * args->size);
-	bool    isConstant = true;
-	for(int i = 0; i < args->size; i++) {
-		results[i] = evaluateValue(args->at(i), times);
+Result Engine::functionExecute(Expression e, int times) {
+	Result *results =
+	    (Result *)malloc(sizeof(Result) * e.as.functionCall.count);
+	bool isConstant = true;
+	for(int i = 0; i < e.as.functionCall.count; i++) {
+		results[i] = evaluateExpression(e.as.functionCall.args[i], times);
 		isConstant = isConstant & results[i].isConstant;
 	}
-	switch(name) {
-#define KEYWORD(x, y, z) \
-	case TOKEN_##x:      \
-		return x##Execute(results, args->size, isConstant, times);
+	switch(e.as.functionCall.name) {
+#define KEYWORD(x, y, z)                                             \
+	case TOKEN_##x:                                                  \
+		return x##Execute(e.token, results, e.as.functionCall.count, \
+		                  isConstant, times);
 #include "keywords.h"
 		default:
-			panic("Invalid function type '%d' passed for execution!", name);
+			panic("Invalid function type '%d' passed for execution!",
+			      e.as.functionCall.name);
 	}
 }
 
-Result Engine::evaluateValue(Value v, int times) {
-	switch(v.type) {
-		case Value::Number: return numberExecute(v, times);
-		case Value::String: return stringExecute(v, times);
-		case Value::Identifier: return identifierExecute(v, times);
-		case Value::FunctionCall:
-			return functionExecute(v.as.func.name, v.as.func.args, times);
-		default: panic("Invalid value type '%d' passed for execution!", v.type);
+Result Engine::evaluateExpression(Expression e, int times) {
+	switch(e.type) {
+		case Expression::FunctionCall: return functionExecute(e, times);
+		case Expression::Literal: {
+			Value v = e.as.literal;
+			switch(v.type) {
+				case Value::Number: return numberExecute(e, times);
+				case Value::String: return stringExecute(e, times);
+				case Value::Identifier: return identifierExecute(e, times);
+				default:
+					panic("Invalid value type '%d' passed for execution!",
+					      v.type);
+			}
+		}
 	}
 }
 
@@ -344,9 +362,9 @@ bool Engine::validateType(Value arg, Value::Type type) {
 	}
 }
 
-Value Engine::print(Token times, Value what) {
-	int64_t num = numberExpression(times).as.number;
-	return evaluateValue(what, num).val;
+Value Engine::print(Token times, Expression what) {
+	int64_t num = numberExpression(times).as.literal.as.number;
+	return evaluateExpression(what, num).val;
 }
 
 Value Engine::execute(const char *file) {
@@ -372,7 +390,7 @@ Value Engine::execute(const char *file) {
 			                  "Expected number as first argument to 'print'!");
 			consume(TOKEN_COMMA,
 			        "Expected ',' after first argument to 'print'!");
-			Value what = parseExpression();
+			Expression what = parseExpression();
 			consume(TOKEN_RIGHT_PAREN, "Expected ')' after print!");
 			return print(t, what);
 		} else if(t.type == TOKEN_EOF) {

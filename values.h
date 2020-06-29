@@ -8,51 +8,27 @@
 
 struct Array; // essentially tuple, size must be predefined
 struct String;
-struct InterimValue;
 struct Repeat;
-
-// An yet to be evaluated function call
-struct FunctionCall {
-	TokenType name;
-	Array *   args;
-
-	static FunctionCall from(TokenType type) {
-		FunctionCall f;
-		f.name = type;
-		f.args = NULL;
-		return f;
-	}
-};
 
 struct Value {
 	// An identifier is also a string, yet we mark it
 	// differently to denote it is something to
 	// evaluate to the engine
-	enum Type {
-		Array,
-		String,
-		Identifier,
-		Number,
-		FunctionCall,
-		Repeat,
-		None
-	} type;
+	enum Type { Array, String, Identifier, Number, Repeat, None } type;
 
 	static const char *TypeStrings[7];
 
 	union {
-		struct FunctionCall func;
-		struct Array *      arr;
-		struct String *     str;
-		struct Repeat *     rep;
-		int64_t             number;
+		struct Array * arr;
+		struct String *str;
+		struct Repeat *rep;
+		int64_t        number;
 	} as;
 
 	inline bool isArray() { return type == Array; }
 	inline bool isString() { return type == String; }
 	inline bool isIdentifier() { return type == Identifier; }
 	inline bool isNumber() { return type == Number; }
-	inline bool isFunctionCall() { return type == FunctionCall; }
 	inline bool isRepeat() { return type == Repeat; }
 
 	Value() : type(None) {}
@@ -70,11 +46,6 @@ struct Value {
 	Value(int64_t t) {
 		as.number = t;
 		type      = Number;
-	}
-
-	Value(struct FunctionCall f) {
-		type    = FunctionCall;
-		as.func = f;
 	}
 
 	Value(struct Array *s) {
