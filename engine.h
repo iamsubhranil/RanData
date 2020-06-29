@@ -8,19 +8,9 @@ struct Result {
 	Value val;
 	bool  isConstant;
 
-	static Result from(Value v) {
-		Result r;
-		r.val        = v;
-		r.isConstant = false;
-		return r;
-	}
-
-	static Result fromConstant(Value v) {
-		Result r;
-		r.val        = v;
-		r.isConstant = true;
-		return r;
-	}
+	Result() : val(), isConstant(false) {}
+	Result(Value v) : val(v), isConstant(false) {}
+	Result(Value v, bool isc) : val(v), isConstant(isc) {}
 };
 
 struct Engine {

@@ -104,11 +104,11 @@ Value Engine::functionExpression(Token a) {
 // execution
 
 Result Engine::numberExecute(Value num, int times) {
-	return Result::fromConstant(Value(Repeat::from(num, times)));
+	return Result(Value(Repeat::from(num, times)), true);
 }
 
 Result Engine::stringExecute(Value num, int times) {
-	return Result::fromConstant(Value(Repeat::from(num, times)));
+	return Result(Value(Repeat::from(num, times)), true);
 }
 
 Result Engine::identifierExecute(Value iden, int times) {
@@ -158,8 +158,7 @@ String *appendOneRow(Result *args, int count, int row) {
 Result Engine::appendExecute(Result *args, int count, bool isConstant,
                              int times) {
 	if(isConstant) {
-		return Result::fromConstant(
-		    Repeat::from(Value(appendOneRow(args, count, 0)), times));
+		return Result(Repeat::from(Value(appendOneRow(args, count, 0)), times));
 	} else {
 		// all arguments are either array, or repeat,
 		// or string, or number
@@ -170,7 +169,7 @@ Result Engine::appendExecute(Result *args, int count, bool isConstant,
 		for(int i = 0; i < times; i++) {
 			res->at(i) = Value(appendOneRow(args, count, i));
 		}
-		return Result::from(Value(res));
+		return Result(Value(res));
 	}
 }
 
@@ -178,7 +177,7 @@ Result Engine::lowerExecute(Result *args, int count, bool isConstant,
                             int times) {
 	(void)count;
 	if(isConstant) {
-		return Result::fromConstant(Repeat::from(
+		return Result(Repeat::from(
 		    String::toString(getAt(args[0].val, 0), true)->lower(), times));
 	} else {
 		Array *res = Array::create(times);
@@ -186,7 +185,7 @@ Result Engine::lowerExecute(Result *args, int count, bool isConstant,
 			res->at(i) =
 			    Value(String::toString(getAt(args[0].val, i), true)->lower());
 		}
-		return Result::from(Value(res));
+		return Result(Value(res));
 	}
 }
 
@@ -205,7 +204,7 @@ Result Engine::number_betweenExecute(Result *args, int count, bool isConstant,
 		for(int i = 0; i < times; i++) {
 			res->at(i) = Value(random.nextIntInRange());
 		}
-		return Result::from(Value(res));
+		return Result(Value(res));
 	} else {
 		Array *res = Array::create(times);
 		for(int i = 0; i < times; i++) {
@@ -220,7 +219,7 @@ Result Engine::number_betweenExecute(Result *args, int count, bool isConstant,
 			random.setIntGenerateRange(v1.as.number, v2.as.number);
 			res->at(i) = Value(random.nextIntInRange());
 		}
-		return Result::from(Value(res));
+		return Result(Value(res));
 	}
 }
 
@@ -237,7 +236,7 @@ Result Engine::number_uptoExecute(Result *args, int count, bool isConstant,
 		for(int i = 0; i < times; i++) {
 			res->at(i) = Value(random.nextIntInRange());
 		}
-		return Result::from(Value(res));
+		return Result(Value(res));
 	} else {
 		Array *res = Array::create(times);
 		for(int i = 0; i < times; i++) {
@@ -250,7 +249,7 @@ Result Engine::number_uptoExecute(Result *args, int count, bool isConstant,
 			random.setIntGenerateRange(0, v1.as.number);
 			res->at(i) = Value(random.nextIntInRange());
 		}
-		return Result::from(Value(res));
+		return Result(Value(res));
 	}
 }
 
@@ -262,16 +261,16 @@ Result Engine::one_ofExecute(Result *args, int count, bool isConstant,
 		for(int i = 0; i < times; i++) {
 			res->at(i) = getAt(args[random.nextIntInRange()].val, 0);
 		}
-		return Result::from(Value(res));
+		return Result(Value(res));
 	} else {
 		Array *res = Array::create(times);
 		random.setIntGenerateRange(0, count - 1);
 		for(int i = 0; i < times; i++) {
 			res->at(i) = getAt(args[random.nextIntInRange()].val, i);
 		}
-		return Result::from(Value(res));
+		return Result(Value(res));
 	}
-	return Result::from(Value());
+	return Result(Value());
 }
 
 Result Engine::one_of_uniqueExecute(Result *args, int count, bool isConstant,
@@ -280,7 +279,7 @@ Result Engine::one_of_uniqueExecute(Result *args, int count, bool isConstant,
 	(void)count;
 	(void)isConstant;
 	(void)times;
-	return Result::from(Value());
+	return Result(Value());
 }
 
 Result Engine::printExecute(Result *args, int count, bool isConstant,
@@ -289,7 +288,7 @@ Result Engine::printExecute(Result *args, int count, bool isConstant,
 	(void)count;
 	(void)isConstant;
 	(void)times;
-	return Result::from(Value());
+	return Result(Value());
 }
 
 Result Engine::functionExecute(TokenType name, Array *args, int times) {
