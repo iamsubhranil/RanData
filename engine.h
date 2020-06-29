@@ -23,6 +23,9 @@ struct FunctionCall {
 
 struct Expression {
 	Token token;
+	int   id; // to denote an unique expression
+
+	static int ExpressionCounter;
 
 	enum Type { Literal, FunctionCall } type;
 
@@ -33,10 +36,13 @@ struct Expression {
 		ExpressionContent(struct FunctionCall f) : functionCall(f) {}
 	} as;
 
-	Expression() : token(Token::PlaceholderToken), type(Literal), as(Value()) {}
-	Expression(Token t, Value v) : token(t), type(Literal), as(v) {}
+	Expression()
+	    : token(Token::PlaceholderToken), id(ExpressionCounter++),
+	      type(Literal), as(Value()) {}
+	Expression(Token t, Value v)
+	    : token(t), id(ExpressionCounter++), type(Literal), as(v) {}
 	Expression(Token t, struct FunctionCall f)
-	    : token(t), type(FunctionCall), as(f) {}
+	    : token(t), id(ExpressionCounter++), type(FunctionCall), as(f) {}
 };
 
 struct Result {
@@ -48,6 +54,21 @@ struct Result {
 	Result(Value v, bool isc) : val(v), isConstant(isc) {}
 };
 
+using Tuple = std::tuple<int, int>;
+
+struct TupleHash {
+	std::size_t operator()(const Tuple &t) const {
+		return std::get<0>(t) * 10 + std::get<1>(t);
+	}
+};
+
+struct TupleEquals {
+	bool operator()(const Tuple &a, const Tuple &b) const {
+		return std::get<0>(a) == std::get<0>(b) &&
+		       std::get<1>(a) == std::get<1>(b);
+	}
+};
+
 struct Engine {
 	// parses an expression and returns a representation
 	// of its structure
@@ -57,6 +78,8 @@ struct Engine {
 	Random                                                  random;
 	HashMap<String *, Expression, StringHash, StringEquals> rules;
 	HashMap<String *, Result, StringHash, StringEquals>     results;
+	// maps an expression id to a set of generated indices
+	// HashMap<int, HashSet<Tuple> *, TupleHash, TupleEquals> uniqueDictionary;
 
 	Engine() : scanner(NULL, ""), random() {}
 	Token      consume(TokenType t, const char *message);
@@ -81,9 +104,9 @@ struct Engine {
 	Result stringExecute(Expression str, int times);
 	Result numberExecute(Expression num, int times);
 	Result functionExecute(Expression e, int times);
-#define KEYWORD(x, y, z)                                                \
-	Result x##Execute(Token t, Result *args, int argc, bool isConstant, \
-	                  int times);
+#define KEYWORD(x, y, z)                                       \
+	Result x##Execute(Expression expr, Result *args, int argc, \
+	                  bool isConstant, int times);
 #include "keywords.h"
 
 	// validates whether the given value contains arguments

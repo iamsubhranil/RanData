@@ -40,9 +40,9 @@ int main(int argc, char *argv[]) {
 		printf("\nElapsed: %0.6fs\n",
 		       (double)(clock() - start) / CLOCKS_PER_SEC);
 		(void)v;
+		// printValue(v);
 	} catch(EngineException e) {
 		const char *m = e.what();
 		cout << "[Error] " << m << "\n";
 	}
-	// printValue(v);
 }

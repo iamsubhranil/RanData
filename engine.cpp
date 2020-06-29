@@ -9,6 +9,8 @@ int Engine::argumentCounts[] = {
 #include "keywords.h"
 };
 
+int Expression::ExpressionCounter = 0;
+
 Engine::ExpressionRule Engine::expressionRules[] = {
 
     NULL, // TOKEN_LEFT_PAREN,
@@ -159,8 +161,8 @@ String *appendOneRow(Result *args, int count, int row) {
 	return res;
 }
 
-Result Engine::appendExecute(Token t, Result *args, int count, bool isConstant,
-                             int times) {
+Result Engine::appendExecute(Expression t, Result *args, int count,
+                             bool isConstant, int times) {
 	(void)t;
 	if(isConstant) {
 		return Result(Repeat::from(Value(appendOneRow(args, count, 0)), times));
@@ -178,8 +180,8 @@ Result Engine::appendExecute(Token t, Result *args, int count, bool isConstant,
 	}
 }
 
-Result Engine::lowerExecute(Token t, Result *args, int count, bool isConstant,
-                            int times) {
+Result Engine::lowerExecute(Expression t, Result *args, int count,
+                            bool isConstant, int times) {
 	(void)count;
 	(void)t;
 	if(isConstant) {
@@ -195,14 +197,14 @@ Result Engine::lowerExecute(Token t, Result *args, int count, bool isConstant,
 	}
 }
 
-Result Engine::number_betweenExecute(Token t, Result *args, int count,
+Result Engine::number_betweenExecute(Expression t, Result *args, int count,
                                      bool isConstant, int times) {
 	(void)count;
 	if(isConstant) {
 		if(!validateType(args[0].val, Value::Number) ||
 		   !validateType(args[1].val, Value::Number)) {
-			throw EngineException(t, "Both arguments of 'number_between' "
-			                         "must be valid numbers!");
+			throw EngineException(t.token, "Both arguments of 'number_between' "
+			                               "must be valid numbers!");
 		}
 		Array *res = Array::create(times);
 		random.setIntGenerateRange(args[0].val.as.number,
@@ -219,8 +221,8 @@ Result Engine::number_betweenExecute(Token t, Result *args, int count,
 			if(!validateType(v1, Value::Number) ||
 			   !validateType(v2, Value::Number)) {
 				throw EngineException(
-				    t, "Both arguments of 'number_between' must be valid "
-				       "numbers!");
+				    t.token, "Both arguments of 'number_between' must be valid "
+				             "numbers!");
 			}
 			random.setIntGenerateRange(v1.as.number, v2.as.number);
 			res->at(i) = Value(random.nextIntInRange());
@@ -229,13 +231,13 @@ Result Engine::number_betweenExecute(Token t, Result *args, int count,
 	}
 }
 
-Result Engine::number_uptoExecute(Token t, Result *args, int count,
+Result Engine::number_uptoExecute(Expression t, Result *args, int count,
                                   bool isConstant, int times) {
 	(void)count;
 	if(isConstant) {
 		if(!validateType(args[0].val, Value::Number)) {
 			throw EngineException(
-			    t, "Argument of 'number_upto' must be a valid number!");
+			    t.token, "Argument of 'number_upto' must be a valid number!");
 		}
 		Array *res = Array::create(times);
 		random.setIntGenerateRange(0, getAt(args[0].val, 0).as.number);
@@ -249,8 +251,8 @@ Result Engine::number_uptoExecute(Token t, Result *args, int count,
 			Value v1 = getAt(args[0].val, i);
 			if(!validateType(v1, Value::Number)) {
 				throw EngineException(
-				    t, "Argument of 'number_upto' must be a valid "
-				       "number!");
+				    t.token, "Argument of 'number_upto' must be a valid "
+				             "number!");
 			}
 			random.setIntGenerateRange(0, v1.as.number);
 			res->at(i) = Value(random.nextIntInRange());
@@ -259,8 +261,8 @@ Result Engine::number_uptoExecute(Token t, Result *args, int count,
 	}
 }
 
-Result Engine::one_ofExecute(Token t, Result *args, int count, bool isConstant,
-                             int times) {
+Result Engine::one_ofExecute(Expression t, Result *args, int count,
+                             bool isConstant, int times) {
 	(void)t;
 	if(isConstant) {
 		Array *res = Array::create(times);
@@ -280,18 +282,50 @@ Result Engine::one_ofExecute(Token t, Result *args, int count, bool isConstant,
 	return Result(Value());
 }
 
-Result Engine::one_of_uniqueExecute(Token t, Result *args, int count,
+Result Engine::one_of_uniqueExecute(Expression t, Result *args, int count,
                                     bool isConstant, int times) {
-	(void)t;
-	(void)args;
-	(void)count;
-	(void)isConstant;
-	(void)times;
-	return Result(Value());
+	if(isConstant) {
+		HashSet<int> selectedSet;
+		if(count < times) {
+			throw EngineException(t.token,
+			                      "Not enough unique values to generate!");
+		}
+		random.setIntGenerateRange(0, count - 1);
+		Array *res = Array::create(times);
+		int    i   = 0;
+		while(i < times) {
+			int yidx = random.nextIntInRange();
+			if(selectedSet.contains(yidx))
+				continue;
+			selectedSet.insert(yidx);
+			res->at(i) = getAt(args[yidx].val, 0);
+			i++;
+		}
+		return Result(Value(res));
+	} else {
+		HashSet<Tuple, TupleHash, TupleEquals> selectedSet;
+		random.setIntGenerateRange(0, count - 1);
+		Random rand2;
+		rand2.setIntGenerateRange(0, times - 1);
+		// is it possible to not have enough values?
+		Array *res = Array::create(times);
+		int    i   = 0;
+		while(i < times) {
+			int   yidx = random.nextIntInRange();
+			int   xidx = rand2.nextIntInRange();
+			Tuple t(yidx, xidx);
+			if(selectedSet.contains(t))
+				continue;
+			selectedSet.insert(t);
+			res->at(i) = getAt(args[yidx].val, xidx);
+			i++;
+		}
+		return Result(Value(res));
+	}
 }
 
-Result Engine::printExecute(Token t, Result *args, int count, bool isConstant,
-                            int times) {
+Result Engine::printExecute(Expression t, Result *args, int count,
+                            bool isConstant, int times) {
 	(void)t;
 	(void)args;
 	(void)count;
@@ -309,10 +343,10 @@ Result Engine::functionExecute(Expression e, int times) {
 		isConstant = isConstant & results[i].isConstant;
 	}
 	switch(e.as.functionCall.name) {
-#define KEYWORD(x, y, z)                                             \
-	case TOKEN_##x:                                                  \
-		return x##Execute(e.token, results, e.as.functionCall.count, \
-		                  isConstant, times);
+#define KEYWORD(x, y, z)                                                   \
+	case TOKEN_##x:                                                        \
+		return x##Execute(e, results, e.as.functionCall.count, isConstant, \
+		                  times);
 #include "keywords.h"
 		default:
 			panic("Invalid function type '%d' passed for execution!",
