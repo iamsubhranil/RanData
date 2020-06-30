@@ -46,12 +46,12 @@ struct Expression {
 };
 
 struct Result {
-	Value val;
-	bool  isConstant;
+	Collection val;
+	bool       isConstant;
 
 	Result() : val(), isConstant(false) {}
-	Result(Value v) : val(v), isConstant(false) {}
-	Result(Value v, bool isc) : val(v), isConstant(isc) {}
+	Result(Collection v) : val(v), isConstant(false) {}
+	Result(Collection v, bool isc) : val(v), isConstant(isc) {}
 };
 
 using Tuple = std::tuple<int, int>;
@@ -69,6 +69,11 @@ struct TupleEquals {
 	}
 };
 
+struct CountedCollection {
+	Collection c;
+	int64_t    size;
+};
+
 struct Engine {
 	// parses an expression and returns a representation
 	// of its structure
@@ -82,14 +87,11 @@ struct Engine {
 	// HashMap<int, HashSet<Tuple> *, TupleHash, TupleEquals> uniqueDictionary;
 
 	Engine() : scanner(NULL, ""), random() {}
-	Token      consume(TokenType t, const char *message);
-	Expression parseExpression(Token t);
-	Expression parseExpression();
-	Value      execute(const char *file);
-	Value      print(Token times, Expression what);
-
-	// returns ith value from the collection
-	static Value getAt(Value v, int idx);
+	Token             consume(TokenType t, const char *message);
+	Expression        parseExpression(Token t);
+	Expression        parseExpression();
+	CountedCollection execute(const char *file);
+	CountedCollection print(Token times, Expression what);
 
 	// expression parsers
 	Expression            identifierExpression(Token ex);

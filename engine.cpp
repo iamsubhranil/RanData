@@ -109,11 +109,13 @@ Expression Engine::functionExpression(Token a) {
 // execution
 
 Result Engine::numberExecute(Expression num, int times) {
-	return Result(Value(Repeat::from(num.as.literal, times)), true);
+	(void)times;
+	return Result(Collection(num.as.literal), true);
 }
 
 Result Engine::stringExecute(Expression str, int times) {
-	return Result(Value(Repeat::from(str.as.literal, times)), true);
+	(void)times;
+	return Result(Collection(str.as.literal), true);
 }
 
 Result Engine::identifierExecute(Expression id, int times) {
@@ -143,7 +145,7 @@ String *appendOneRow(Result *args, int count, int row) {
 	// calculate the total size
 	int totalSize = 0;
 	for(int i = 0; i < count; i++) {
-		strings[i] = String::toString(Engine::getAt(args[i].val, row));
+		strings[i] = String::toString(args[i].val.at(row));
 		totalSize += strings[i]->size;
 	}
 	// allocate the whole string at once
@@ -165,7 +167,7 @@ Result Engine::appendExecute(Expression t, Result *args, int count,
                              bool isConstant, int times) {
 	(void)t;
 	if(isConstant) {
-		return Result(Repeat::from(Value(appendOneRow(args, count, 0)), times));
+		return Result(Collection(appendOneRow(args, count, 0)), true);
 	} else {
 		// all arguments are either array, or repeat,
 		// or string, or number
@@ -176,7 +178,7 @@ Result Engine::appendExecute(Expression t, Result *args, int count,
 		for(int i = 0; i < times; i++) {
 			res->at(i) = Value(appendOneRow(args, count, i));
 		}
-		return Result(Value(res));
+		return Result(Collection(res));
 	}
 }
 
@@ -185,15 +187,16 @@ Result Engine::lowerExecute(Expression t, Result *args, int count,
 	(void)count;
 	(void)t;
 	if(isConstant) {
-		return Result(Repeat::from(
-		    String::toString(getAt(args[0].val, 0), true)->lower(), times));
+		return Result(
+		    Collection(String::toString(args[0].val.at(0), true)->lower()),
+		    true);
 	} else {
 		Array *res = Array::create(times);
 		for(int i = 0; i < times; i++) {
 			res->at(i) =
-			    Value(String::toString(getAt(args[0].val, i), true)->lower());
+			    Value(String::toString(args[0].val.at(i), true)->lower());
 		}
-		return Result(Value(res));
+		return Result(Collection(res));
 	}
 }
 
@@ -201,23 +204,23 @@ Result Engine::number_betweenExecute(Expression t, Result *args, int count,
                                      bool isConstant, int times) {
 	(void)count;
 	if(isConstant) {
-		if(!validateType(args[0].val, Value::Number) ||
-		   !validateType(args[1].val, Value::Number)) {
+		if(!validateType(args[0].val.at(0), Value::Number) ||
+		   !validateType(args[1].val.at(0), Value::Number)) {
 			throw EngineException(t.token, "Both arguments of 'number_between' "
 			                               "must be valid numbers!");
 		}
 		Array *res = Array::create(times);
-		random.setIntGenerateRange(args[0].val.as.number,
-		                           args[1].val.as.number);
+		random.setIntGenerateRange(args[0].val.at(0).as.number,
+		                           args[1].val.at(0).as.number);
 		for(int i = 0; i < times; i++) {
 			res->at(i) = Value(random.nextIntInRange());
 		}
-		return Result(Value(res));
+		return Result(Collection(res));
 	} else {
 		Array *res = Array::create(times);
 		for(int i = 0; i < times; i++) {
-			Value v1 = getAt(args[0].val, i);
-			Value v2 = getAt(args[1].val, i);
+			Value v1 = args[0].val.at(i);
+			Value v2 = args[1].val.at(i);
 			if(!validateType(v1, Value::Number) ||
 			   !validateType(v2, Value::Number)) {
 				throw EngineException(
@@ -227,7 +230,7 @@ Result Engine::number_betweenExecute(Expression t, Result *args, int count,
 			random.setIntGenerateRange(v1.as.number, v2.as.number);
 			res->at(i) = Value(random.nextIntInRange());
 		}
-		return Result(Value(res));
+		return Result(Collection(res));
 	}
 }
 
@@ -235,20 +238,20 @@ Result Engine::number_uptoExecute(Expression t, Result *args, int count,
                                   bool isConstant, int times) {
 	(void)count;
 	if(isConstant) {
-		if(!validateType(args[0].val, Value::Number)) {
+		if(!validateType(args[0].val.at(0), Value::Number)) {
 			throw EngineException(
 			    t.token, "Argument of 'number_upto' must be a valid number!");
 		}
 		Array *res = Array::create(times);
-		random.setIntGenerateRange(0, getAt(args[0].val, 0).as.number);
+		random.setIntGenerateRange(0, args[0].val.at(0).as.number);
 		for(int i = 0; i < times; i++) {
 			res->at(i) = Value(random.nextIntInRange());
 		}
-		return Result(Value(res));
+		return Result(Collection(res));
 	} else {
 		Array *res = Array::create(times);
 		for(int i = 0; i < times; i++) {
-			Value v1 = getAt(args[0].val, i);
+			Value v1 = args[0].val.at(i);
 			if(!validateType(v1, Value::Number)) {
 				throw EngineException(
 				    t.token, "Argument of 'number_upto' must be a valid "
@@ -257,7 +260,7 @@ Result Engine::number_uptoExecute(Expression t, Result *args, int count,
 			random.setIntGenerateRange(0, v1.as.number);
 			res->at(i) = Value(random.nextIntInRange());
 		}
-		return Result(Value(res));
+		return Result(Collection(res));
 	}
 }
 
@@ -268,16 +271,16 @@ Result Engine::one_ofExecute(Expression t, Result *args, int count,
 		Array *res = Array::create(times);
 		random.setIntGenerateRange(0, count - 1);
 		for(int i = 0; i < times; i++) {
-			res->at(i) = getAt(args[random.nextIntInRange()].val, 0);
+			res->at(i) = args[random.nextIntInRange()].val.at(0);
 		}
-		return Result(Value(res));
+		return Result(Collection(res));
 	} else {
 		Array *res = Array::create(times);
 		random.setIntGenerateRange(0, count - 1);
 		for(int i = 0; i < times; i++) {
-			res->at(i) = getAt(args[random.nextIntInRange()].val, i);
+			res->at(i) = args[random.nextIntInRange()].val.at(i);
 		}
-		return Result(Value(res));
+		return Result(Collection(res));
 	}
 	return Result(Value());
 }
@@ -298,10 +301,10 @@ Result Engine::one_of_uniqueExecute(Expression t, Result *args, int count,
 			if(selectedSet.contains(yidx))
 				continue;
 			selectedSet.insert(yidx);
-			res->at(i) = getAt(args[yidx].val, 0);
+			res->at(i) = args[yidx].val.at(0);
 			i++;
 		}
-		return Result(Value(res));
+		return Result(Collection(res));
 	} else {
 		HashSet<Tuple, TupleHash, TupleEquals> selectedSet;
 		random.setIntGenerateRange(0, count - 1);
@@ -317,10 +320,10 @@ Result Engine::one_of_uniqueExecute(Expression t, Result *args, int count,
 			if(selectedSet.contains(t))
 				continue;
 			selectedSet.insert(t);
-			res->at(i) = getAt(args[yidx].val, xidx);
+			res->at(i) = args[yidx].val.at(xidx);
 			i++;
 		}
-		return Result(Value(res));
+		return Result(Collection(res));
 	}
 }
 
@@ -371,37 +374,18 @@ Result Engine::evaluateExpression(Expression e, int times) {
 	}
 }
 
-Value Engine::getAt(Value v, int idx) {
-	switch(v.type) {
-		case Value::String:
-		case Value::Identifier:
-		case Value::Number: return v;
-		case Value::Repeat: return v.as.rep->val;
-		case Value::Array: return v.as.arr->at(idx);
-		default: panic("Invalid getAt on '%s'!", Value::TypeStrings[v.type]);
-	}
-}
-
 bool Engine::validateType(Value arg, Value::Type type) {
 	if(arg.type == type)
 		return true;
-	switch(arg.type) {
-		case Value::Repeat: return validateType(arg.as.rep->val, type);
-		case Value::Array:
-			for(int i = 0; i < arg.as.arr->size; i++) {
-				if(!validateType(arg.as.arr->at(i), type))
-					return false;
-			}
-		default: return false;
-	}
+	return false;
 }
 
-Value Engine::print(Token times, Expression what) {
+CountedCollection Engine::print(Token times, Expression what) {
 	int64_t num = numberExpression(times).as.literal.as.number;
-	return evaluateExpression(what, num).val;
+	return (CountedCollection){evaluateExpression(what, num).val, num};
 }
 
-Value Engine::execute(const char *file) {
+CountedCollection Engine::execute(const char *file) {
 	Token t;
 	scanner = Scanner(file);
 	while(true) {
@@ -410,7 +394,7 @@ Value Engine::execute(const char *file) {
 		}
 		t = scanner.scanNextToken();
 		if(t.type == TOKEN_EOF)
-			return Value();
+			return (CountedCollection){Collection(), 0};
 		// expect identifier in the beginning of a statement
 		if(t.type != TOKEN_IDENTIFIER && t.type != TOKEN_print) {
 			throw EngineException(t, "Expected identifier!");
@@ -431,5 +415,5 @@ Value Engine::execute(const char *file) {
 			break;
 		}
 	}
-	return Value();
+	return (CountedCollection){Collection(), 0};
 }

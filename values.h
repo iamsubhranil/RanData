@@ -8,28 +8,23 @@
 
 struct Array; // essentially tuple, size must be predefined
 struct String;
-struct Repeat;
 
 struct Value {
 	// An identifier is also a string, yet we mark it
 	// differently to denote it is something to
 	// evaluate to the engine
-	enum Type { Array, String, Identifier, Number, Repeat, None } type;
+	enum Type { String, Identifier, Number, None } type;
 
 	static const char *TypeStrings[7];
 
 	union {
-		struct Array * arr;
 		struct String *str;
-		struct Repeat *rep;
 		int64_t        number;
 	} as;
 
-	inline bool isArray() { return type == Array; }
 	inline bool isString() { return type == String; }
 	inline bool isIdentifier() { return type == Identifier; }
 	inline bool isNumber() { return type == Number; }
-	inline bool isRepeat() { return type == Repeat; }
 
 	Value() : type(None) {}
 	Value(struct String *str) {
@@ -46,33 +41,6 @@ struct Value {
 	Value(int64_t t) {
 		as.number = t;
 		type      = Number;
-	}
-
-	Value(struct Array *s) {
-		type   = Array;
-		as.arr = s;
-	}
-
-	Value(struct Repeat *r) {
-		type   = Repeat;
-		as.rep = r;
-	}
-};
-
-struct Repeat {
-	int   size;
-	Value val;
-
-	static Repeat *from(Value v, int times) {
-		Repeat *r = (Repeat *)malloc(sizeof(Repeat));
-		r->size   = times;
-		r->val    = v;
-		return r;
-	}
-
-	inline Value &at(int idx) {
-		(void)idx;
-		return val;
 	}
 };
 
@@ -154,8 +122,8 @@ struct String {
 					return v.as.str->copy();
 				return v.as.str;
 			case Value::Number: return fromNumber(v.as.number);
-			case Value::Repeat: return toString(v.as.rep->val, own);
-			default:
+			case Value::Identifier:
+			case Value::None:
 				// should not reach here
 				return NULL;
 		}
@@ -184,4 +152,29 @@ struct StringEquals {
 		return a->hash_ == b->hash_ && a->size == b->size &&
 		       strncmp(a->values(), b->values(), a->size) == 0;
 	}
+};
+
+struct Collection {
+	enum Type { Array, Repeat, None } type;
+
+	union CollectionContent {
+		struct Array *arr;
+		Value         repeat;
+
+		CollectionContent() : arr(NULL) {}
+		CollectionContent(Value v) : repeat(v) {}
+		CollectionContent(struct Array *a) : arr(a) {}
+	} as;
+
+	inline Value &at(int idx) {
+		switch(type) {
+			case Repeat: return as.repeat;
+			case None: // unreachable
+			case Array: return as.arr->at(idx);
+		}
+	}
+
+	Collection() : type(None) {}
+	Collection(Value r) : type(Repeat), as(r) {}
+	Collection(struct Array *a) : type(Array), as(a) {}
 };
