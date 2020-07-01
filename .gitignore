@@ -17,3 +17,5 @@ generator
 *.profdata
 cmake-build*/
 .gdb_history
+*.o
+.depend
