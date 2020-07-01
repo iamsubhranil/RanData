@@ -61,7 +61,7 @@ int main(int argc, char *argv[]) {
 		}
 		printf("Generating data..\n");
 		fflush(stdout);
-		CountedCollection v = e.execute(argv[1]);
+		CountedCollection v = e.execute(arg_value(args, 'i'));
 		if(arg_is_present(args, 't')) {
 			printf("Elapsed: %0.6fs\n",
 			       (double)(clock() - start) / CLOCKS_PER_SEC);
