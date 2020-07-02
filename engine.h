@@ -74,6 +74,8 @@ struct CountedCollection {
 	int64_t    size;
 };
 
+using ResultMap = HashMap<String *, Result, StringHash, StringEquals>;
+
 struct Engine {
 	// parses an expression and returns a representation
 	// of its structure
@@ -82,7 +84,6 @@ struct Engine {
 	Scanner                                                 scanner;
 	Random                                                  random;
 	HashMap<String *, Expression, StringHash, StringEquals> rules;
-	HashMap<String *, Result, StringHash, StringEquals>     results;
 	// maps an expression id to a set of generated indices
 	// HashMap<int, HashSet<Tuple> *, TupleHash, TupleEquals> uniqueDictionary;
 
@@ -101,11 +102,11 @@ struct Engine {
 	static ExpressionRule expressionRules[];
 
 	// expression evaluators
-	Result evaluateExpression(Expression e, int times);
-	Result identifierExecute(Expression iden, int times);
+	Result evaluateExpression(Expression e, int times, ResultMap &results);
+	Result identifierExecute(Expression iden, int times, ResultMap &results);
 	Result stringExecute(Expression str, int times);
 	Result numberExecute(Expression num, int times);
-	Result functionExecute(Expression e, int times);
+	Result functionExecute(Expression e, int times, ResultMap &results);
 #define KEYWORD(x, y, z)                                       \
 	Result x##Execute(Expression expr, Result *args, int argc, \
 	                  bool isConstant, int times);

@@ -1,6 +1,7 @@
 #include "engine.h"
 
 #include "display.h"
+#include <thread>
 
 #define CALL_FUNCTION(func) ((this)->*func)
 
@@ -118,7 +119,7 @@ Result Engine::stringExecute(Expression str, int times) {
 	return Result(Collection(str.as.literal), true);
 }
 
-Result Engine::identifierExecute(Expression id, int times) {
+Result Engine::identifierExecute(Expression id, int times, ResultMap &results) {
 	Value iden = id.as.literal;
 	if(results.contains(iden.as.str)) {
 		return results[iden.as.str];
@@ -126,7 +127,7 @@ Result Engine::identifierExecute(Expression id, int times) {
 		throw EngineException("No such rule found!");
 	}
 	Expression repr = rules[iden.as.str];
-	Result     res  = evaluateExpression(repr, times);
+	Result     res  = evaluateExpression(repr, times, results);
 	// cache the result
 	results[iden.as.str] = res;
 	return res;
@@ -337,12 +338,14 @@ Result Engine::printExecute(Expression t, Result *args, int count,
 	return Result(Value());
 }
 
-Result Engine::functionExecute(Expression e, int times) {
+Result Engine::functionExecute(Expression e, int times,
+                               ResultMap &ruleResults) {
 	Result *results =
 	    (Result *)malloc(sizeof(Result) * e.as.functionCall.count);
 	bool isConstant = true;
 	for(int i = 0; i < e.as.functionCall.count; i++) {
-		results[i] = evaluateExpression(e.as.functionCall.args[i], times);
+		results[i] =
+		    evaluateExpression(e.as.functionCall.args[i], times, ruleResults);
 		isConstant = isConstant & results[i].isConstant;
 	}
 	switch(e.as.functionCall.name) {
@@ -357,15 +360,17 @@ Result Engine::functionExecute(Expression e, int times) {
 	}
 }
 
-Result Engine::evaluateExpression(Expression e, int times) {
+Result Engine::evaluateExpression(Expression e, int times, ResultMap &results) {
 	switch(e.type) {
-		case Expression::FunctionCall: return functionExecute(e, times);
+		case Expression::FunctionCall:
+			return functionExecute(e, times, results);
 		case Expression::Literal: {
 			Value v = e.as.literal;
 			switch(v.type) {
 				case Value::Number: return numberExecute(e, times);
 				case Value::String: return stringExecute(e, times);
-				case Value::Identifier: return identifierExecute(e, times);
+				case Value::Identifier:
+					return identifierExecute(e, times, results);
 				default:
 					panic("Invalid value type '%d' passed for execution!",
 					      v.type);
@@ -381,8 +386,9 @@ bool Engine::validateType(Value arg, Value::Type type) {
 }
 
 CountedCollection Engine::print(Token times, Expression what) {
-	int64_t num = numberExpression(times).as.literal.as.number;
-	return (CountedCollection){evaluateExpression(what, num).val, num};
+	int64_t   num = numberExpression(times).as.literal.as.number;
+	ResultMap results;
+	return (CountedCollection){evaluateExpression(what, num, results).val, num};
 }
 
 CountedCollection Engine::execute(const char *file) {
