@@ -1,5 +1,5 @@
-override CXXFLAGS += -Wall -Wextra
-override LDFLAGS +=
+override CXXFLAGS += -Wall -Wextra -std=c++11 -pthread
+override LDFLAGS += -std=c++11 -pthread
 
 RM=rm -f
 # $(wildcard *.cpp /xxx/xxx/*.cpp): get all .cpp files from the current directory and dir "/xxx/xxx/"

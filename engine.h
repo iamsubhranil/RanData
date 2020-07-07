@@ -4,6 +4,9 @@
 #include "scanner.h"
 #include "values.h"
 
+#include <future>
+#include <mutex>
+
 struct Expression;
 // An yet to be evaluated function call
 struct FunctionCall {
@@ -70,8 +73,13 @@ struct TupleEquals {
 };
 
 struct CountedCollection {
-	Collection c;
-	int64_t    size;
+	enum Type { SINGLE, NESTED } type;
+	union {
+		Collection                c;
+		struct CountedCollection *nest;
+	};
+	int64_t size;
+	CountedCollection() : type(NESTED), size(0) {}
 };
 
 using ResultMap = HashMap<String *, Result, StringHash, StringEquals>;
@@ -82,12 +90,14 @@ struct Engine {
 	typedef Expression (Engine::*ExpressionRule)(Token ex);
 
 	Scanner                                                 scanner;
-	Random                                                  random;
 	HashMap<String *, Expression, StringHash, StringEquals> rules;
+	int                                                     numProcesses;
 	// maps an expression id to a set of generated indices
-	// HashMap<int, HashSet<Tuple> *, TupleHash, TupleEquals> uniqueDictionary;
+	HashMap<int, HashSet<Tuple, TupleHash, TupleEquals> *> uniqueDictionary;
+	std::vector<std::mutex *>                              uniqueMutexes;
 
-	Engine() : scanner(NULL, ""), random() {}
+	Engine(int n = 1)
+	    : scanner(NULL, ""), numProcesses(n), uniqueDictionary() {}
 	Token             consume(TokenType t, const char *message);
 	Expression        parseExpression(Token t);
 	Expression        parseExpression();
@@ -102,14 +112,25 @@ struct Engine {
 	static ExpressionRule expressionRules[];
 
 	// expression evaluators
-	Result evaluateExpression(Expression e, int times, ResultMap &results);
-	Result identifierExecute(Expression iden, int times, ResultMap &results);
+	// offset denotes which part of the whole dataset
+	// a function should operate on. it does not matter
+	// mostly for the functions which do not share
+	// data among threads. but for functions which
+	// do, like one_of_unique, this function denotes
+	// the exact lower bound of its choice.
+	Result evaluateExpression(Expression e, int times, ResultMap &results,
+	                          int offset);
+	void   evaluateExpression1(Expression e, int times,
+	                           std::promise<Result> *returnValue, int offset);
+	Result identifierExecute(Expression iden, int times, ResultMap &results,
+	                         int offset);
 	Result stringExecute(Expression str, int times);
 	Result numberExecute(Expression num, int times);
-	Result functionExecute(Expression e, int times, ResultMap &results);
+	Result functionExecute(Expression e, int times, ResultMap &results,
+	                       int offset);
 #define KEYWORD(x, y, z)                                       \
 	Result x##Execute(Expression expr, Result *args, int argc, \
-	                  bool isConstant, int times);
+	                  bool isConstant, int times, int offset);
 #include "keywords.h"
 
 	// validates whether the given value contains arguments

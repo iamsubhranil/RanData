@@ -5,6 +5,7 @@
 #include <iostream>
 
 #include "engine.h"
+#include <chrono>
 
 using namespace std;
 
@@ -17,10 +18,16 @@ void printValue(Value v, FILE *f) {
 }
 
 void printCollection(CountedCollection c, FILE *f) {
-	Collection v = c.c;
-	for(int i = 0; i < c.size; i++) {
-		printValue(v.at(i), f);
-		fprintf(f, "\n");
+	if(c.type == CountedCollection::Type::NESTED) {
+		for(int i = 0; i < c.size; i++) {
+			printCollection(c.nest[i], f);
+		}
+	} else {
+		Collection v = c.c;
+		for(int i = 0; i < c.size; i++) {
+			printValue(v.at(i), f);
+			fprintf(f, "\n");
+		}
 	}
 }
 
@@ -42,10 +49,17 @@ int main(int argc, char *argv[]) {
 	if(arg_missing_mandatory(args))
 		return 1;
 
+	int n = 1;
 	if(arg_is_present(args, 'p')) {
-		printf("[Info] Multiprocessing is not yet available!\n");
+		char *end = NULL;
+		n         = strtol(arg_value(args, 'p'), &end, 10);
+		if(*end != 0) {
+			cout << "[Error] Invalid number of processes '"
+			     << arg_value(args, 'p') << "'!\n";
+			return 1;
+		}
 	}
-	Engine e;
+	Engine e(n);
 	try {
 		e.execute("bootstrap.format");
 	} catch(EngineException ex) {
@@ -54,17 +68,17 @@ int main(int argc, char *argv[]) {
 		cout << "[Warn] Loading bootstrap module failed!\n";
 		cout << "[Warn] One or more default rules may not be available!\n";
 	}
-	clock_t start;
+	auto start = chrono::high_resolution_clock::now();
 	try {
-		if(arg_is_present(args, 't')) {
-			start = clock();
-		}
 		printf("Generating data..\n");
 		fflush(stdout);
 		CountedCollection v = e.execute(arg_value(args, 'i'));
 		if(arg_is_present(args, 't')) {
+			auto end = chrono::high_resolution_clock::now();
 			printf("Elapsed: %0.6fs\n",
-			       (double)(clock() - start) / CLOCKS_PER_SEC);
+			       chrono::duration_cast<chrono::microseconds>(end - start)
+			               .count() *
+			           1e-6);
 		}
 		if(!arg_is_present(args, 'g')) {
 			FILE *f = stdout;

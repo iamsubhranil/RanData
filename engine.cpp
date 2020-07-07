@@ -104,7 +104,12 @@ Expression Engine::functionExpression(Token a) {
 		}
 		f.count = i;
 	}
-	return Expression(a, f);
+	Expression e = Expression(a, f);
+	if(a.type == TOKEN_one_of_unique) {
+		uniqueMutexes.resize(e.id + 1);
+		uniqueMutexes[e.id] = new std::mutex();
+	}
+	return e;
 }
 
 // execution
@@ -119,7 +124,8 @@ Result Engine::stringExecute(Expression str, int times) {
 	return Result(Collection(str.as.literal), true);
 }
 
-Result Engine::identifierExecute(Expression id, int times, ResultMap &results) {
+Result Engine::identifierExecute(Expression id, int times, ResultMap &results,
+                                 int offset) {
 	Value iden = id.as.literal;
 	if(results.contains(iden.as.str)) {
 		return results[iden.as.str];
@@ -127,7 +133,7 @@ Result Engine::identifierExecute(Expression id, int times, ResultMap &results) {
 		throw EngineException("No such rule found!");
 	}
 	Expression repr = rules[iden.as.str];
-	Result     res  = evaluateExpression(repr, times, results);
+	Result     res  = evaluateExpression(repr, times, results, offset);
 	// cache the result
 	results[iden.as.str] = res;
 	return res;
@@ -165,8 +171,9 @@ String *appendOneRow(Result *args, int count, int row) {
 }
 
 Result Engine::appendExecute(Expression t, Result *args, int count,
-                             bool isConstant, int times) {
+                             bool isConstant, int times, int offset) {
 	(void)t;
+	(void)offset;
 	if(isConstant) {
 		return Result(Collection(appendOneRow(args, count, 0)), true);
 	} else {
@@ -184,9 +191,10 @@ Result Engine::appendExecute(Expression t, Result *args, int count,
 }
 
 Result Engine::lowerExecute(Expression t, Result *args, int count,
-                            bool isConstant, int times) {
+                            bool isConstant, int times, int offset) {
 	(void)count;
 	(void)t;
+	(void)offset;
 	if(isConstant) {
 		return Result(
 		    Collection(String::toString(args[0].val.at(0), true)->lower()),
@@ -202,8 +210,9 @@ Result Engine::lowerExecute(Expression t, Result *args, int count,
 }
 
 Result Engine::number_betweenExecute(Expression t, Result *args, int count,
-                                     bool isConstant, int times) {
+                                     bool isConstant, int times, int offset) {
 	(void)count;
+	(void)offset;
 	if(isConstant) {
 		if(!validateType(args[0].val.at(0), Value::Number) ||
 		   !validateType(args[1].val.at(0), Value::Number)) {
@@ -211,6 +220,7 @@ Result Engine::number_betweenExecute(Expression t, Result *args, int count,
 			                               "must be valid numbers!");
 		}
 		Array *res = Array::create(times);
+		Random random;
 		random.setIntGenerateRange(args[0].val.at(0).as.number,
 		                           args[1].val.at(0).as.number);
 		for(int i = 0; i < times; i++) {
@@ -219,6 +229,7 @@ Result Engine::number_betweenExecute(Expression t, Result *args, int count,
 		return Result(Collection(res));
 	} else {
 		Array *res = Array::create(times);
+		Random random;
 		for(int i = 0; i < times; i++) {
 			Value v1 = args[0].val.at(i);
 			Value v2 = args[1].val.at(i);
@@ -236,14 +247,16 @@ Result Engine::number_betweenExecute(Expression t, Result *args, int count,
 }
 
 Result Engine::number_uptoExecute(Expression t, Result *args, int count,
-                                  bool isConstant, int times) {
+                                  bool isConstant, int times, int offset) {
 	(void)count;
+	(void)offset;
 	if(isConstant) {
 		if(!validateType(args[0].val.at(0), Value::Number)) {
 			throw EngineException(
 			    t.token, "Argument of 'number_upto' must be a valid number!");
 		}
 		Array *res = Array::create(times);
+		Random random;
 		random.setIntGenerateRange(0, args[0].val.at(0).as.number);
 		for(int i = 0; i < times; i++) {
 			res->at(i) = Value(random.nextIntInRange());
@@ -251,6 +264,7 @@ Result Engine::number_uptoExecute(Expression t, Result *args, int count,
 		return Result(Collection(res));
 	} else {
 		Array *res = Array::create(times);
+		Random random;
 		for(int i = 0; i < times; i++) {
 			Value v1 = args[0].val.at(i);
 			if(!validateType(v1, Value::Number)) {
@@ -266,10 +280,12 @@ Result Engine::number_uptoExecute(Expression t, Result *args, int count,
 }
 
 Result Engine::one_ofExecute(Expression t, Result *args, int count,
-                             bool isConstant, int times) {
+                             bool isConstant, int times, int offset) {
 	(void)t;
+	(void)offset;
 	if(isConstant) {
 		Array *res = Array::create(times);
+		Random random;
 		random.setIntGenerateRange(0, count - 1);
 		for(int i = 0; i < times; i++) {
 			res->at(i) = args[random.nextIntInRange()].val.at(0);
@@ -277,6 +293,7 @@ Result Engine::one_ofExecute(Expression t, Result *args, int count,
 		return Result(Collection(res));
 	} else {
 		Array *res = Array::create(times);
+		Random random;
 		random.setIntGenerateRange(0, count - 1);
 		for(int i = 0; i < times; i++) {
 			res->at(i) = args[random.nextIntInRange()].val.at(i);
@@ -286,28 +303,40 @@ Result Engine::one_ofExecute(Expression t, Result *args, int count,
 	return Result(Value());
 }
 
+#include <iostream>
+
 Result Engine::one_of_uniqueExecute(Expression t, Result *args, int count,
-                                    bool isConstant, int times) {
+                                    bool isConstant, int times, int offset) {
+	// take the mutex
+	std::unique_lock<std::mutex> guard(*uniqueMutexes[t.id]);
+	if(!uniqueDictionary.contains(t.id)) {
+		uniqueDictionary[t.id] = new HashSet<Tuple, TupleHash, TupleEquals>();
+	}
+	HashSet<Tuple, TupleHash, TupleEquals> *selectedSet =
+	    uniqueDictionary[t.id];
+	std::cout << "Generating unique for expr " << t.id << " on thread "
+	          << std::this_thread::get_id() << "\n";
 	if(isConstant) {
-		HashSet<int> selectedSet;
 		if(count < times) {
 			throw EngineException(t.token,
 			                      "Not enough unique values to generate!");
 		}
+		Random random;
 		random.setIntGenerateRange(0, count - 1);
 		Array *res = Array::create(times);
 		int    i   = 0;
 		while(i < times) {
-			int yidx = random.nextIntInRange();
-			if(selectedSet.contains(yidx))
+			int   yidx = random.nextIntInRange();
+			Tuple t    = Tuple(offset, yidx);
+			if(selectedSet->contains(t))
 				continue;
-			selectedSet.insert(yidx);
+			selectedSet->insert(t);
 			res->at(i) = args[yidx].val.at(0);
 			i++;
 		}
 		return Result(Collection(res));
 	} else {
-		HashSet<Tuple, TupleHash, TupleEquals> selectedSet;
+		Random random;
 		random.setIntGenerateRange(0, count - 1);
 		Random rand2;
 		rand2.setIntGenerateRange(0, times - 1);
@@ -317,10 +346,12 @@ Result Engine::one_of_uniqueExecute(Expression t, Result *args, int count,
 		while(i < times) {
 			int   yidx = random.nextIntInRange();
 			int   xidx = rand2.nextIntInRange();
-			Tuple t(yidx, xidx);
-			if(selectedSet.contains(t))
+			Tuple t(offset + xidx, yidx);
+			// printf("here i: %d times: %d size: %lu x: %d y: %d\n", i, times,
+			//       selectedSet->size(), xidx, yidx);
+			if(selectedSet->contains(t))
 				continue;
-			selectedSet.insert(t);
+			selectedSet->insert(t);
 			res->at(i) = args[yidx].val.at(xidx);
 			i++;
 		}
@@ -329,54 +360,67 @@ Result Engine::one_of_uniqueExecute(Expression t, Result *args, int count,
 }
 
 Result Engine::printExecute(Expression t, Result *args, int count,
-                            bool isConstant, int times) {
+                            bool isConstant, int times, int offset) {
 	(void)t;
 	(void)args;
 	(void)count;
 	(void)isConstant;
 	(void)times;
+	(void)offset;
 	return Result(Value());
 }
 
-Result Engine::functionExecute(Expression e, int times,
-                               ResultMap &ruleResults) {
+Result Engine::functionExecute(Expression e, int times, ResultMap &ruleResults,
+                               int offset) {
 	Result *results =
 	    (Result *)malloc(sizeof(Result) * e.as.functionCall.count);
 	bool isConstant = true;
 	for(int i = 0; i < e.as.functionCall.count; i++) {
-		results[i] =
-		    evaluateExpression(e.as.functionCall.args[i], times, ruleResults);
+		results[i] = evaluateExpression(e.as.functionCall.args[i], times,
+		                                ruleResults, offset);
 		isConstant = isConstant & results[i].isConstant;
 	}
+	Result res;
 	switch(e.as.functionCall.name) {
-#define KEYWORD(x, y, z)                                                   \
-	case TOKEN_##x:                                                        \
-		return x##Execute(e, results, e.as.functionCall.count, isConstant, \
-		                  times);
+#define KEYWORD(x, y, z)                                                  \
+	case TOKEN_##x:                                                       \
+		res = x##Execute(e, results, e.as.functionCall.count, isConstant, \
+		                 times, offset);                                  \
+		break;
 #include "keywords.h"
 		default:
 			panic("Invalid function type '%d' passed for execution!",
 			      e.as.functionCall.name);
+			break;
 	}
+	free(results);
+	return res;
 }
 
-Result Engine::evaluateExpression(Expression e, int times, ResultMap &results) {
+Result Engine::evaluateExpression(Expression e, int times, ResultMap &results,
+                                  int offset) {
 	switch(e.type) {
 		case Expression::FunctionCall:
-			return functionExecute(e, times, results);
+			return functionExecute(e, times, results, offset);
 		case Expression::Literal: {
 			Value v = e.as.literal;
 			switch(v.type) {
 				case Value::Number: return numberExecute(e, times);
 				case Value::String: return stringExecute(e, times);
 				case Value::Identifier:
-					return identifierExecute(e, times, results);
+					return identifierExecute(e, times, results, offset);
 				default:
 					panic("Invalid value type '%d' passed for execution!",
 					      v.type);
 			}
 		}
 	}
+}
+
+void Engine::evaluateExpression1(Expression ex, int num,
+                                 std::promise<Result> *result, int offset) {
+	ResultMap resultCache;
+	result->set_value(evaluateExpression(ex, num, resultCache, offset));
 }
 
 bool Engine::validateType(Value arg, Value::Type type) {
@@ -386,9 +430,36 @@ bool Engine::validateType(Value arg, Value::Type type) {
 }
 
 CountedCollection Engine::print(Token times, Expression what) {
-	int64_t   num = numberExpression(times).as.literal.as.number;
-	ResultMap results;
-	return (CountedCollection){evaluateExpression(what, num, results).val, num};
+	int64_t              num = numberExpression(times).as.literal.as.number;
+	std::thread          threads[numProcesses];
+	std::promise<Result> results[numProcesses];
+	int                  partCount[numProcesses];
+	int                  part = num / numProcesses;
+	int                  done = 0;
+	for(int i = 0; i < numProcesses - 1; i++) {
+		threads[i] = std::thread(&Engine::evaluateExpression1, this, what, part,
+		                         &results[i], done);
+		partCount[i] = part;
+		done += part;
+	}
+	threads[numProcesses - 1] =
+	    std::thread(&Engine::evaluateExpression1, this, what, num - done,
+	                &results[numProcesses - 1], done);
+	partCount[numProcesses - 1] = num - done;
+	for(int i = 0; i < numProcesses; i++) {
+		threads[i].join();
+	}
+	CountedCollection cc;
+	cc.type = CountedCollection::NESTED;
+	cc.size = numProcesses;
+	cc.nest =
+	    (CountedCollection *)malloc(sizeof(CountedCollection) * numProcesses);
+	for(int i = 0; i < numProcesses; i++) {
+		cc.nest[i].type = CountedCollection::SINGLE;
+		cc.nest[i].c    = results[i].get_future().get().val;
+		cc.nest[i].size = partCount[i];
+	}
+	return cc;
 }
 
 CountedCollection Engine::execute(const char *file) {
@@ -400,7 +471,7 @@ CountedCollection Engine::execute(const char *file) {
 		}
 		t = scanner.scanNextToken();
 		if(t.type == TOKEN_EOF)
-			return (CountedCollection){Collection(), 0};
+			return CountedCollection();
 		// expect identifier in the beginning of a statement
 		if(t.type != TOKEN_IDENTIFIER && t.type != TOKEN_print) {
 			throw EngineException(t, "Expected identifier!");
@@ -421,5 +492,5 @@ CountedCollection Engine::execute(const char *file) {
 			break;
 		}
 	}
-	return (CountedCollection){Collection(), 0};
+	return CountedCollection();
 }

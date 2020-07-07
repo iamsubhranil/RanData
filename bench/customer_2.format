@@ -6,4 +6,4 @@ pretext = "INSERT INTO `customer`(`name`, `address`, `areaid`, `number`, `total_
 close = ");"
 areaid = number_between(1, 50)
 statement = append(pretext, "'", name, "', '", address, "', ", areaid, ", ", phone_no, ", ", total_spent, close)
-print(1000000, statement)
+print(10000000, statement)
